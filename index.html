@@ -1,0 +1,1603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DPM Filter Changes</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .animate-fade-in { animation: fadeIn 0.15s ease-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans min-h-screen flex flex-col antialiased">
+
+  <!-- Nav Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40 px-4 py-3 sm:px-6 shadow-sm">
+    <div class="max-w-7xl mx-auto flex flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="bg-slate-900 text-white p-2 rounded-xl shadow-sm">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-extrabold tracking-tight text-slate-900 leading-none">DPM Filter Changes</h1>
+          <p class="text-[9px] sm:text-[10px] text-slate-500 font-medium tracking-wide uppercase mt-1">Filter compliance reporting</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <!-- 3-toggle Segment Control -->
+        <div class="bg-slate-100 p-0.5 rounded-xl border border-slate-200 shadow-inner flex">
+          <button onclick="window.setActiveTab('all')" id="tab-all" class="px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all">View all</button>
+          <button onclick="window.setActiveTab('ac')" id="tab-ac" class="px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all">AC Filters</button>
+          <button onclick="window.setActiveTab('pump')" id="tab-pump" class="px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all">Pump Filters</button>
+        </div>
+
+        <div id="connection-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[10px] sm:text-xs font-semibold border transition-all">
+          <span id="connection-dot" class="h-2 w-2 rounded-full" />
+          <span id="connection-text" class="hidden sm:inline">Offline</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Stage -->
+  <main id="main-content" class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col gap-6">
+    <div class="flex-1 flex flex-col items-center justify-center py-20 gap-3">
+      <svg class="h-8 w-8 text-blue-600 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+      <p class="text-xs font-semibold text-slate-500 tracking-wide uppercase">Hooking into Database Stream...</p>
+    </div>
+  </main>
+
+  <!-- Modals Container -->
+  <div id="modal-container"></div>
+
+  <!-- SVG Icons Cache -->
+  <script>
+    const iconWrench = `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
+    const iconSearch = `<svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
+    const iconX = `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+    const iconCalendar = `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+    const iconMessageSquare = `<svg class="h-3.5 w-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
+    const iconMapPin = `<svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
+    const iconPlus = `<svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
+    const iconTrash2 = `<svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
+    const iconPlay = `<svg class="h-3.5 w-3.5 fill-current" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+    const iconInfo = `<svg class="h-10 w-10 text-slate-350 mx-auto mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
+    const iconAlertTriangle = `<svg class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+    const iconCheck = `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`;
+    const iconClipboardList = `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>`;
+  </script>
+
+  <!-- Firebase & Core Logical script -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // Firebase Credentials consistent with source
+    const firebaseConfig = {
+      apiKey: "AIzaSyDIGLmJ5r_fBhB5xOL8oadQ7csN3wGh2dI",
+      authDomain: "dpm-alignment.firebaseapp.com",
+      databaseURL: "https://dpm-alignment-default-rtdb.firebaseio.com",
+      projectId: "dpm-alignment",
+      storageBucket: "dpm-alignment.firebasestorage.app",
+      messagingSenderId: "298588092433",
+      appId: "1:298588092433:web:694a9412658adac039d9b0"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Dynamic state managers
+    const state = {
+      activeTab: "all",
+      searchQuery: "",
+      activeFilter: "all",
+      activeDepartment: "all",
+      activeRegion: "all",
+      activeSize: "all",
+      showSizeDropdown: false,
+      selectedStoreId: null,
+      showBulkImport: false,
+
+      // Modal active parameters representing technician entries
+      modalDateStr: "",
+      modalAcChanged: "",
+      modalCoilsCleaned: "",
+      modalCoilsCleanedDate: "",
+      modalComments: "",
+      modalShowAddSizes: false,
+      modalAddSizeRows: [],
+      modalShowUnitDetails: false,
+      modalShowSizesSection: false,
+      modalGasChanged: "",
+      modalDieselChanged: "",
+      modalGasDateStr: "",
+      modalDieselDateStr: "",
+      modalSaving: false,
+
+      // Bulk Importer variables
+      bulkTextInput: "",
+      parsedMatches: [],
+      isAnalyzed: false,
+      isBulkSaving: false
+    };
+
+    let restaurants = {};
+    let acRecords = {};
+    let pumpRecords = {};
+    let online = false;
+    let loading = true;
+
+    // Utility formulas
+    function getFirebaseSafePathKey(num) {
+      if (!num) return "unknown";
+      return String(num).replace(/[.#$[\]/]/g, "").replace(/\s+/g, "_").trim();
+    }
+
+    function calculateDaysSinceChange(lastChanged) {
+      if (!lastChanged) return null;
+      const diffTime = Date.now() - Number(lastChanged);
+      return Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+    }
+
+    function getStoreCategory(name) {
+      if (!name) return "fastfood";
+      const lc = name.toLowerCase();
+      if (lc.includes("paradise") || lc.includes("pqs") || lc.includes("c-store") || lc.includes("market")) return "cstore";
+      if (lc.includes("car wash") || lc.includes("carwash")) return "carwash";
+      return "fastfood";
+    }
+
+    function formatStoreNameDisplay(name) {
+      if (!name) return "Store";
+      return name
+        .replace(/Paradise Quick Stop/i, "PQS")
+        .replace(/Burger King/i, "BK")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function getChicagoTodayDateString(timestamp) {
+      const date = timestamp ? new Date(timestamp) : new Date();
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Chicago',
+        year: 'numeric', month: '2-digit', day: '2-digit'
+      });
+      const parts = formatter.formatToParts(date);
+      const m = {};
+      parts.forEach(p => m[p.type] = p.value);
+      return `${m.year}-${m.month}-${m.day}`;
+    }
+
+    function convertDateStringToChicagoTimestamp(dateStr) {
+      if (!dateStr) return null;
+      const [y, m, d] = dateStr.split('-').map(Number);
+      return new Date(y, m - 1, d, 12, 0, 0).getTime();
+    }
+
+    function getStoreRegion(store) {
+      if (store.territory) {
+        const t = String(store.territory).toLowerCase().trim();
+        if (t.includes("east") || t === "e" || t === "etx") return "east";
+        if (t.includes("west") || t === "w" || t === "wtx") return "west";
+      }
+      const val = store.longitude !== undefined ? store.longitude : (store.lng !== undefined ? store.lng : 0);
+      const lng = parseFloat(String(val));
+      if (isNaN(lng) || lng === 0) return "unknown";
+      return lng >= -96 ? "east" : "west";
+    }
+
+    function getDimensionColor(val) {
+      const v = (val || "").trim().toUpperCase();
+      const map = {
+        "20": { bg: "bg-blue-100", text: "text-blue-800", border: "border-blue-200" },
+        "16": { bg: "bg-orange-100", text: "text-orange-850", border: "border-orange-200" },
+        "25": { bg: "bg-purple-100", text: "text-purple-800", border: "border-purple-200" },
+        "30": { bg: "bg-red-100", text: "text-red-800", border: "border-red-200" },
+        "2":  { bg: "bg-green-100", text: "text-green-800", border: "border-green-200" },
+        "4":  { bg: "bg-yellow-105", text: "text-yellow-805", border: "border-yellow-205" }
+      };
+      if (map[v]) return map[v];
+      let hash = 0;
+      for (let i = 0; i < v.length; i++) hash = v.charCodeAt(i) + ((hash << 5) - hash);
+      const colors = [
+        { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
+        { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200" },
+        { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" },
+        { bg: "bg-red-50", text: "text-red-705", border: "border-red-200" },
+        { bg: "bg-green-50", text: "text-green-700", border: "border-green-200" }
+      ];
+      return colors[Math.abs(hash) % colors.length];
+    }
+
+    function renderDimensionBadges(sizeStr) {
+      if (!sizeStr) return "";
+      return `<div class="inline-flex items-center flex-wrap gap-[2px]">
+        ${sizeStr.trim().split(/([xX×])/).map(part => {
+          const val = part.trim();
+          if (!val) return "";
+          if (part.toLowerCase() === "x" || part === "×") {
+            return `<span class="text-slate-400 font-bold text-[9px] mx-[1px]">×</span>`;
+          }
+          const c = getDimensionColor(val);
+          return `<span class="font-mono text-[9px] font-bold ${c.bg} ${c.text} border ${c.border} rounded px-1 py-0.5 leading-none shadow-3xs">${val}</span>`;
+        }).join("")}
+      </div>`;
+    }
+
+    // Dynamic elements triggers exposed globally inside single index file scope
+    window.setActiveTab = (tab) => {
+      state.activeTab = tab;
+      state.showBulkImport = false;
+      render();
+    };
+
+    window.setRegion = (reg) => { state.activeRegion = reg; render(); };
+    window.setFilter = (filt) => { state.activeFilter = filt; render(); };
+    window.setCategory = (cat) => { state.activeDepartment = cat; render(); };
+    window.toggleSizeDropdown = () => { state.showSizeDropdown = !state.showSizeDropdown; render(); };
+    window.setActiveSize = (size) => { state.activeSize = size; state.showSizeDropdown = false; render(); };
+    
+    window.updateSearchQuery = (val) => {
+      state.searchQuery = val;
+      // Filter list and render dynamically without full-page overwrite to safeguard keyboard cursors
+      filterAndRenderCardsAndStats();
+    };
+
+    window.openBulkImport = () => { state.showBulkImport = true; render(); };
+    window.closeBulkImport = () => { state.showBulkImport = false; render(); };
+
+    window.openStore = (id) => {
+      state.selectedStoreId = id;
+      const store = restaurants[id];
+      if (store) {
+        const safeKey = getFirebaseSafePathKey(store.storeNumber);
+        const acRec = acRecords[safeKey] || {};
+        state.modalDateStr = acRec.lastFilterChangeTimestamp ? getChicagoTodayDateString(acRec.lastFilterChangeTimestamp) : "";
+        state.modalAcChanged = acRec.acChanged || (acRec.lastFilterChangeTimestamp ? "yes" : "");
+        state.modalCoilsCleaned = acRec.coilsCleaned || "";
+        state.modalCoilsCleanedDate = acRec.coilsCleanedDate || (acRec.coilsCleaned === "yes" && acRec.coilsCleanedTimestamp ? getChicagoTodayDateString(acRec.coilsCleanedTimestamp) : "");
+        state.modalComments = acRec.comments || "";
+        state.modalShowAddSizes = false;
+        state.modalAddSizeRows = [];
+        state.modalShowUnitDetails = false;
+        state.modalShowSizesSection = false;
+
+        const pumpRec = pumpRecords[safeKey] || {};
+        state.modalGasChanged = pumpRec.gasChanged || "";
+        state.modalDieselChanged = pumpRec.dieselChanged || "";
+        state.modalGasDateStr = pumpRec.gasChangedDate || "";
+        state.modalDieselDateStr = pumpRec.dieselChangedDate || "";
+      }
+      render();
+    };
+
+    window.closeStoreModal = () => { state.selectedStoreId = null; render(); };
+
+    window.onModalAcChanged = (val) => {
+      state.modalAcChanged = val;
+      state.modalDateStr = val === "yes" ? getChicagoTodayDateString() : "";
+      render();
+    };
+    window.onModalDateChanged = (val) => {
+      state.modalDateStr = val;
+      if (val) state.modalAcChanged = "yes";
+      render();
+    };
+    window.onModalCoilsCleaned = (val) => {
+      state.modalCoilsCleaned = val;
+      state.modalCoilsCleanedDate = val === "yes" ? getChicagoTodayDateString() : "";
+      render();
+    };
+    window.onModalCoilsCleanedDateChanged = (val) => {
+      state.modalCoilsCleanedDate = val;
+      if (val) state.modalCoilsCleaned = "yes";
+      render();
+    };
+    window.onModalGasChanged = (val) => {
+      state.modalGasChanged = val;
+      state.modalGasDateStr = val === "yes" ? getChicagoTodayDateString() : "";
+      render();
+    };
+    window.onModalGasDateChanged = (val) => {
+      state.modalGasDateStr = val;
+      if (val) state.modalGasChanged = "yes";
+      render();
+    };
+    window.onModalDieselChanged = (val) => {
+      state.modalDieselChanged = val;
+      state.modalDieselDateStr = val === "yes" ? getChicagoTodayDateString() : "";
+      render();
+    };
+    window.onModalDieselDateChanged = (val) => {
+      state.modalDieselDateStr = val;
+      if (val) state.modalDieselChanged = "yes";
+      render();
+    };
+    window.onModalCommentsChanged = (val) => {
+      state.modalComments = val.substring(0, 250);
+      const c = document.getElementById("comments-counter");
+      if (c) c.innerText = `${state.modalComments.length} / 250`;
+    };
+
+    window.toggleModalSizesSection = () => { state.modalShowSizesSection = !state.modalShowSizesSection; render(); };
+    window.toggleModalShowUnitDetails = () => { state.modalShowUnitDetails = !state.modalShowUnitDetails; render(); };
+    window.initSizeEditMode = () => {
+      const store = restaurants[state.selectedStoreId];
+      if (!store) return;
+      const safeKey = getFirebaseSafePathKey(store.storeNumber);
+      const acRec = acRecords[safeKey] || {};
+      let parsed = [];
+      try {
+        if (acRec.filterSizesList) parsed = JSON.parse(acRec.filterSizesList);
+      } catch(e){}
+      if (parsed.length === 0 && acRec.filterSize) {
+        parsed = acRec.filterSize.split(/,\s*/).map((p, idx) => {
+          const match = p.trim().match(/^\((\d+)\)\s*(.*)$/);
+          return {
+            unit: String(idx + 1),
+            size: match ? match[2].trim().toUpperCase() : p.trim().toUpperCase(),
+            qty: match ? match[1].trim() : "4"
+          };
+        });
+      }
+      state.modalAddSizeRows = parsed.length > 0 ? parsed : [{ unit: "1", size: "", qty: "4" }];
+      state.modalShowAddSizes = true;
+      render();
+    };
+    window.cancelModalSizesEdit = () => { state.modalShowAddSizes = false; render(); };
+    window.addModalSizeRow = () => {
+      state.modalAddSizeRows.push({ unit: String(state.modalAddSizeRows.length + 1), size: "", qty: "4" });
+      render();
+    };
+    window.deleteModalSizeRow = (idx) => {
+      state.modalAddSizeRows.splice(idx, 1);
+      render();
+    };
+    window.updateModalSizeRow = (idx, field, val) => {
+      state.modalAddSizeRows[idx][field] = val;
+    };
+
+    window.saveModalSizes = async () => {
+      let errOccurred = false;
+      const list = [];
+      const totals = {};
+      state.modalAddSizeRows.forEach(row => {
+        const u = (row.unit || "").trim() || "1";
+        const s = (row.size || "").trim().replace(/\s+/g, "").toUpperCase();
+        const q = parseInt(row.qty || "4", 10) || 4;
+        if (s) {
+          if (q <= 0) {
+            alert("Quantities must be greater than 0");
+            errOccurred = true;
+            return;
+          }
+          list.push({ unit: u, size: s, qty: String(q) });
+          totals[s] = (totals[s] || 0) + q;
+        }
+      });
+      if (errOccurred) return;
+      if (list.length === 0) {
+        alert("Please add at least one valid custom size row.");
+        return;
+      }
+      const summary = Object.entries(totals).map(([sz, qty]) => `(${qty}) ${sz}`).join(", ");
+      const store = restaurants[state.selectedStoreId];
+      const safeKey = getFirebaseSafePathKey(store.storeNumber);
+      try {
+        await update(ref(db, `filterChanges/${safeKey}`), {
+          storeNumber: store.storeNumber,
+          filterSize: summary,
+          filterSizesList: JSON.stringify(list)
+        });
+        alert("Filter size configuration updated successfully!");
+        state.modalShowAddSizes = false;
+        render();
+      } catch (err) {
+        alert("Could not update configuration: " + err.message);
+      }
+    };
+
+    window.clearModalSizes = async () => {
+      if (confirm("Clear custom filter size configurations for this store?")) {
+        const store = restaurants[state.selectedStoreId];
+        const safeKey = getFirebaseSafePathKey(store.storeNumber);
+        try {
+          await update(ref(db, `filterChanges/${safeKey}`), { filterSize: null, filterSizesList: null });
+          alert("Configurations cleared successfully!");
+          render();
+        } catch(e) {
+          alert("Reset failed: " + e.message);
+        }
+      }
+    };
+
+    window.clearLastChangeDate = async () => {
+      if (confirm("Reset and clear recorded filter change fields?")) {
+        state.modalSaving = true;
+        render();
+        const store = restaurants[state.selectedStoreId];
+        const safeKey = getFirebaseSafePathKey(store.storeNumber);
+        try {
+          await update(ref(db, `filterChanges/${safeKey}`), {
+            acChanged: null, lastFilterChangeTimestamp: null,
+            coilsCleaned: null, coilsCleanedDate: null, coilsCleanedTimestamp: null
+          });
+          state.modalSaving = false;
+          state.selectedStoreId = null;
+          render();
+        } catch(e) {
+          state.modalSaving = false;
+          render();
+          alert("Reset failed: " + e.message);
+        }
+      }
+    };
+
+    window.saveModalAll = async () => {
+      if (state.modalAcChanged === "yes" && !state.modalDateStr) {
+        alert("Please select a date for the AC filter change."); return;
+      }
+      if (state.modalCoilsCleaned === "yes" && !state.modalCoilsCleanedDate) {
+        alert("Please select a date for the coils cleaning."); return;
+      }
+      const store = restaurants[state.selectedStoreId];
+      const isCStore = getStoreCategory(store.storeName) === "cstore";
+      if (isCStore) {
+        if (state.modalGasChanged === "yes" && !state.modalGasDateStr) {
+          alert("Please select a date for Gas filters."); return;
+        }
+        if (state.modalDieselChanged === "yes" && !state.modalDieselDateStr) {
+          alert("Please select a date for Diesel filters."); return;
+        }
+      }
+
+      state.modalSaving = true;
+      render();
+
+      const acTimestamp = state.modalAcChanged === "yes" ? convertDateStringToChicagoTimestamp(state.modalDateStr) : null;
+      const coilsTimestamp = state.modalCoilsCleaned === "yes" ? convertDateStringToChicagoTimestamp(state.modalCoilsCleanedDate) : null;
+      const safeKey = getFirebaseSafePathKey(store.storeNumber);
+
+      try {
+        const acPayload = {
+          storeNumber: store.storeNumber,
+          acChanged: state.modalAcChanged,
+          lastFilterChangeTimestamp: acTimestamp,
+          coilsCleaned: state.modalCoilsCleaned,
+          coilsCleanedDate: state.modalCoilsCleaned === "yes" ? state.modalCoilsCleanedDate : "",
+          coilsCleanedTimestamp: coilsTimestamp,
+          comments: state.modalComments.trim()
+        };
+        await update(ref(db, `filterChanges/${safeKey}`), acPayload);
+
+        if (isCStore) {
+          const gasTS = state.modalGasChanged === "yes" ? convertDateStringToChicagoTimestamp(state.modalGasDateStr) : null;
+          const dieselTS = state.modalDieselChanged === "yes" ? convertDateStringToChicagoTimestamp(state.modalDieselDateStr) : null;
+          const pumpPayload = {
+            storeNumber: store.storeNumber,
+            gasChanged: state.modalGasChanged,
+            dieselChanged: state.modalDieselChanged,
+            gasChangedDate: state.modalGasChanged === "yes" ? state.modalGasDateStr : "",
+            dieselChangedDate: state.modalDieselChanged === "yes" ? state.modalDieselDateStr : "",
+            gasChangedTimestamp: gasTS,
+            dieselChangedTimestamp: dieselTS,
+            updatedAt: Date.now()
+          };
+          const currentRec = pumpRecords[safeKey] || {};
+          if (currentRec.comments) {
+            pumpPayload.comments = currentRec.comments;
+          } else if (state.modalComments.trim()) {
+            pumpPayload.comments = state.modalComments.trim();
+          }
+          await update(ref(db, `gasCoverChanges/${safeKey}`), pumpPayload);
+        }
+
+        state.modalSaving = false;
+        state.selectedStoreId = null;
+        render();
+      } catch (err) {
+        state.modalSaving = false;
+        render();
+        alert("Failed to save: " + err.message);
+      }
+    };
+
+    // Bulk Importer events
+    window.bulkTextInputChanged = (val) => { state.bulkTextInput = val; };
+    window.loadBulkImportSample = () => {
+      state.bulkTextInput = `Burger King #26183 Denton\t1\t20x20x2\t4
+\t2\t16x16x2\t4
+\t3\t16x16x2\t4
+\t4\t20x20x2\t4
+Burger King #22027 Alvord\t1\t16x25x1\t3
+\t2\t20x20x1\t2
+\t3\t12x24x1\t2
+\t4\t20x25x1\t1
+Burger King #26924 Corinth\t1\t20x20x2\t4
+\t2\t16x25x2\t2
+Burger King #27028 Gainesville\t1\t20x20x2\t4
+\t2\t16x16x2\t4`;
+      render();
+    };
+    window.clearBulkImport = () => {
+      state.bulkTextInput = "";
+      state.parsedMatches = [];
+      state.isAnalyzed = false;
+      render();
+    };
+
+    window.analyzeBulkImport = () => {
+      if (!state.bulkTextInput.trim()) {
+        alert("Please paste some valid spreadsheet data first."); return;
+      }
+      const rawParsed = parseMasterFilterBlock(state.bulkTextInput);
+      if (rawParsed.length === 0) {
+        alert("Could not detect any valid lines."); return;
+      }
+      state.parsedMatches = rawParsed.map(({ rawName, items }) => {
+        const match = matchParsedStoreToMetadata(rawName);
+        const subMap = {};
+        items.forEach(it => {
+          if (!it.size) return;
+          const q = parseInt(it.qty, 10) || 4;
+          subMap[it.size] = (subMap[it.size] || 0) + q;
+        });
+        const summary = Object.entries(subMap).map(([sz, qty]) => `(${qty}) ${sz}`).join(", ");
+        return { rawName, matchedStore: match, items, summary };
+      });
+      state.isAnalyzed = true;
+      render();
+    };
+
+    window.commitBulkImport = async () => {
+      const deploy = state.parsedMatches.filter(m => m.matchedStore !== null);
+      if (deploy.length === 0) {
+        alert("Zero matched stores found to upload."); return;
+      }
+      if (!confirm(`Save custom filter sizes for ${deploy.length} stores?`)) return;
+      state.isBulkSaving = true;
+      render();
+      let ok = 0;
+      for (let m of deploy) {
+        const safeKey = getFirebaseSafePathKey(m.matchedStore.storeNumber);
+        try {
+          await update(ref(db, `filterChanges/${safeKey}`), {
+            storeNumber: m.matchedStore.storeNumber,
+            filterSize: m.summary,
+            filterSizesList: JSON.stringify(m.items)
+          });
+          ok++;
+        } catch(e) { console.error(e); }
+      }
+      state.isBulkSaving = false;
+      alert(`Bulk Import Complete! Successfully configured database filters for ${ok} locations.`);
+      window.clearBulkImport();
+      window.closeBulkImport();
+    };
+
+    // Parser functions
+    function parseMasterFilterBlock(text) {
+      const cleaned = text.replace(/["“”]/g, "");
+      const lines = cleaned.split(/\r?\n/);
+      const result = [];
+      let current = null;
+      
+      lines.forEach(line => {
+        if (!line.trim()) return;
+        const norm = line.toLowerCase();
+        if (norm.includes("unit") && (norm.includes("size") || norm.includes("qty") || norm.includes("filter"))) return;
+        const cells = line.split(/\t| {2,}/).map(c => c.trim()).filter(Boolean);
+        if (!cells.length) return;
+        
+        const isDim = (s) => /^\d+\s*[xX]\s*\d+/.test(s);
+        
+        if (cells.length === 1) {
+          const val = cells[0];
+          if (/[A-Za-z]/.test(val) && !/^\d+$/.test(val)) {
+            current = { rawName: val, items: [] };
+            result.push(current);
+          }
+        } else if (cells.length >= 4) {
+          current = { rawName: cells[0], items: [{ unit: cells[1], size: normalizeSize(cells[2]), qty: cells[3] }] };
+          result.push(current);
+        } else if (cells.length === 3) {
+          if (/[A-Za-z]/.test(cells[0]) && !/^\d+$/.test(cells[0])) {
+            current = { rawName: cells[0], items: [] };
+            result.push(current);
+            if (isDim(cells[1])) {
+              current.items.push({ unit: "1", size: normalizeSize(cells[1]), qty: cells[2] });
+            } else {
+              current.items.push({ unit: cells[1], size: normalizeSize(cells[2]), qty: "4" });
+            }
+          } else if (current) {
+            current.items.push({ unit: cells[0], size: normalizeSize(cells[1]), qty: cells[2] });
+          }
+        } else if (cells.length === 2) {
+          if (isDim(cells[0]) && current) {
+            current.items.push({ unit: String(current.items.length + 1), size: normalizeSize(cells[0]), qty: cells[1] });
+          } else if (isDim(cells[1])) {
+            if (/[A-Za-z]/.test(cells[0]) && !/^\d+$/.test(cells[0])) {
+              current = { rawName: cells[0], items: [{ unit: "1", size: normalizeSize(cells[1]), qty: "4" }] };
+              result.push(current);
+            } else if (current) {
+              current.items.push({ unit: cells[0], size: normalizeSize(cells[1]), qty: "4" });
+            }
+          }
+        }
+      });
+      return result;
+    }
+
+    function normalizeSize(s) {
+      if (!s) return "";
+      const cleaned = s.trim().toUpperCase();
+      const match = cleaned.match(/^(\d+\s*[xX]\s*\d+(?:\s*[xX]\s*\d+)?)(.*)$/);
+      return match ? match[1].replace(/\s+/g, "") : cleaned;
+    }
+
+    function matchParsedStoreToMetadata(rawName) {
+      const norm = rawName.toLowerCase();
+      const list = Object.values(restaurants);
+      let match = list.find(s => s.storeName.toLowerCase() === norm);
+      if (match) return match;
+      
+      const hashMatch = norm.match(/#(\d+)/);
+      if (hashMatch) {
+         match = list.find(s => String(s.storeNumber) === hashMatch[1]);
+         if (match) return match;
+      }
+      const looseMatch = norm.match(/\b\d{3,}\b/);
+      if (looseMatch) {
+         match = list.find(s => String(s.storeNumber) === looseMatch[0]);
+         if (match) return match;
+      }
+      let bestStore = null, maxLen = 0;
+      list.forEach(s => {
+         let len = 0;
+         const w1 = norm.split(/\s+/).filter(w => w.length > 2);
+         const w2 = s.storeName.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+         w1.forEach(w => { if (w2.includes(w)) len += w.length; });
+         if (len > maxLen) { maxLen = len; bestStore = s; }
+      });
+      return maxLen > 4 ? bestStore : null;
+    }
+
+    // Dynamic Live Renderer loop
+    function updateHeader() {
+      // Highlight tabs
+      ["all", "ac", "pump"].forEach(t => {
+        const btn = document.getElementById("tab-" + t);
+        if (btn) {
+          if (state.activeTab === t) {
+            btn.className = "px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all bg-white text-slate-900 shadow-sm";
+          } else {
+            btn.className = "px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all text-slate-500 hover:text-slate-900";
+          }
+        }
+      });
+      // Connection badge states
+      const badge = document.getElementById("connection-badge");
+      const dot = document.getElementById("connection-dot");
+      const label = document.getElementById("connection-text");
+      if (badge && dot && label) {
+        if (online) {
+          badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[10px] sm:text-xs font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200";
+          dot.className = "h-2 w-2 rounded-full bg-emerald-500 animate-pulse";
+          label.innerHTML = "Syncing Realtime &bull; <span class='text-[9px] text-emerald-600 font-extrabold uppercase ml-1'>Active</span>";
+        } else {
+          badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[10px] sm:text-xs font-semibold border bg-rose-50 text-rose-700 border-rose-200";
+          dot.className = "h-2 w-2 rounded-full bg-rose-500";
+          label.innerHTML = "Offline";
+        }
+      }
+    }
+
+    function render() {
+      const container = document.getElementById("main-content");
+      const modal = document.getElementById("modal-container");
+      updateHeader();
+
+      if (loading) {
+        container.innerHTML = `<div class="flex-1 flex flex-col items-center justify-center py-20 gap-3">
+          <svg class="h-8 w-8 text-blue-600 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+          <p class="text-xs font-semibold text-slate-500 tracking-wide uppercase">Synchronizing Operational Repositories...</p>
+        </div>`;
+        modal.innerHTML = "";
+        return;
+      }
+
+      if (state.showBulkImport) {
+        container.innerHTML = renderBulkImporter();
+        modal.innerHTML = "";
+        return;
+      }
+
+      container.innerHTML = renderACFiltersApp();
+      filterAndRenderCardsAndStats();
+
+      if (state.selectedStoreId) {
+        modal.innerHTML = renderStoreDetailsModal();
+      } else {
+        modal.innerHTML = "";
+      }
+    }
+
+    function renderACFiltersApp() {
+      const title = state.activeTab === "all" ? "Unified Compliance Board" : state.activeTab === "ac" ? "AC Operational Board" : "Fuel Pump Maintenance Board";
+      const desc = state.activeTab === "all" ? "Combined AC Filters and Fuel Pump maintenance schedules reporting at a glance" : state.activeTab === "ac" ? "Track and log client AC filter change records across all location segments" : "Track gas and diesel fuel filter compliance for active convenience stores";
+
+      return `
+        <div class="flex flex-col gap-4 w-full">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 class="text-base sm:text-lg font-black text-slate-900 leading-none">${title}</h2>
+              <p class="text-xs text-slate-500 mt-1">${desc}</p>
+            </div>
+            <button onclick="window.openBulkImport()" class="bg-slate-900 border border-slate-900 text-white hover:bg-slate-800 text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5 shrink-0">
+              ${iconClipboardList}
+              <span>Bulk Import Sizes</span>
+            </button>
+          </div>
+
+          <!-- Region Segment Toggles -->
+          <div class="grid grid-cols-3 gap-1.5 sm:gap-2.5 w-full text-sans">
+            <button onclick="window.setRegion('all')" id="region-all" class="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 py-2.5 px-2 rounded-2xl border text-[10px] sm:text-xs font-bold transition-all shadow-3xs"></button>
+            <button onclick="window.setRegion('east')" id="region-east" class="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 py-2.5 px-2 rounded-2xl border text-[10px] sm:text-xs font-bold transition-all shadow-3xs"></button>
+            <button onclick="window.setRegion('west')" id="region-west" class="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 py-2.5 px-2 rounded-2xl border text-[10px] sm:text-xs font-bold transition-all shadow-3xs"></button>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-2xl shadow-3xs p-3 flex flex-col gap-3">
+            <div class="flex flex-wrap items-center gap-2.5 w-full">
+              <!-- Search bar -->
+              <div class="relative flex-1 min-w-[200px]">
+                <span class="absolute left-3 top-1/2 -current -translate-y-1/2">${iconSearch}</span>
+                <input type="text" id="search-input" oninput="window.updateSearchQuery(this.value)" placeholder="Search store name, number or sizes..." class="w-full text-xs border border-slate-200 rounded-xl pl-9 pr-4 py-2 outline-none focus:border-slate-400 placeholder-slate-400" />
+              </div>
+
+              <!-- Filters selections -->
+              <select id="select-status" onchange="window.setFilter(this.value)" class="border border-slate-250 text-xs font-semibold text-slate-700 bg-slate-100 rounded-xl px-2.5 py-2 cursor-pointer outline-none"></select>
+              <select id="select-category" onchange="window.setCategory(this.value)" class="border border-slate-250 text-xs font-semibold text-slate-700 bg-slate-100 rounded-xl px-2.5 py-2 cursor-pointer outline-none">
+                <option value="all">All Categories</option>
+                <option value="fastfood">🍔 Fast Food</option>
+                <option value="cstore">🏪 C-Store</option>
+                <option value="carwash">🧼 Car Wash</option>
+              </select>
+
+              <!-- Size selector dropdown -->
+              <div class="relative">
+                <button onclick="window.toggleSizeDropdown()" class="border border-slate-250 text-xs font-semibold text-slate-700 bg-slate-100/50 hover:bg-slate-100 rounded-xl px-3 py-2 cursor-pointer outline-none transition-all flex items-center justify-between gap-2.5 min-w-[130px]">
+                  <span id="active-size-label" class="truncate">📏 All Sizes</span>
+                  <span class="text-[9px] text-slate-400">▼</span>
+                </button>
+                <div id="size-dropdown-menu" class="hidden absolute top-full right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 min-w-[180px] max-h-[220px] overflow-y-auto py-1 animate-fade-in"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stores Grid Stage -->
+          <div id="cards-grid-container"></div>
+        </div>
+      `;
+    }
+
+    function filterAndRenderCardsAndStats() {
+      // Retain search input value to protect cursor focus state
+      const searchBox = document.getElementById("search-input");
+      if (searchBox && searchBox.value !== state.searchQuery) {
+        searchBox.value = state.searchQuery;
+      }
+
+      const allMapped = Object.entries(restaurants).map(([id, store]) => {
+        const safeKey = getFirebaseSafePathKey(store.storeNumber);
+        const acRec = acRecords[safeKey] || {};
+        const acTS = acRec.lastFilterChangeTimestamp || null;
+        const acDays = calculateDaysSinceChange(acTS);
+        let acStatus = "state-none";
+        if (acDays !== null) acStatus = acDays > 60 ? "state-overdue" : "state-good";
+
+        let sizesList = [];
+        try {
+          if (acRec.filterSizesList) sizesList = JSON.parse(acRec.filterSizesList);
+        } catch(e){}
+        if (sizesList.length === 0 && acRec.filterSize) {
+          sizesList = acRec.filterSize.split(/,\s*/).map((p, idx) => {
+            const match = p.trim().match(/^\((\d+)\)\s*(.*)$/);
+            return {
+              unit: String(idx + 1),
+              size: match ? match[2].trim().toUpperCase() : p.trim().toUpperCase(),
+              qty: match ? match[1].trim() : "4"
+            };
+          });
+        }
+
+        const isCStore = getStoreCategory(store.storeName) === "cstore";
+        const pumpRec = pumpRecords[safeKey] || {};
+        const gasChanged = pumpRec.gasChanged || "";
+        const dieselChanged = pumpRec.dieselChanged || "";
+        const gasTS = pumpRec.gasChangedTimestamp || null;
+        const dieselTS = pumpRec.dieselChangedTimestamp || null;
+        const lastPumpTS = [gasTS, dieselTS].filter(t => t !== null);
+        const pumpTS = lastPumpTS.length > 0 ? Math.max(...lastPumpTS) : null;
+        const pumpDays = calculateDaysSinceChange(pumpTS);
+
+        let pumpStatus = "pending";
+        if (isCStore) {
+          if (gasChanged === "yes" && dieselChanged === "yes") {
+            pumpStatus = (pumpDays !== null && pumpDays > 90) ? "overdue" : "good";
+          } else if (gasChanged === "yes" || dieselChanged === "yes") {
+            pumpStatus = (pumpDays !== null && pumpDays > 90) ? "overdue" : "pending";
+          }
+        } else {
+          pumpStatus = "good";
+        }
+
+        let status = "state-none", statusText = "Pending", indicatorText = "Never Changed", pillIcon = "⏱️";
+        if (state.activeTab === "ac") {
+          status = acStatus;
+          if (acStatus === "state-overdue") { statusText = "Overdue"; indicatorText = `${acDays}d overdue`; pillIcon = "⚠️"; }
+          else if (acStatus === "state-good") { statusText = "Good"; indicatorText = `${acDays}d ago`; pillIcon = "✅"; }
+        } else if (state.activeTab === "pump") {
+          if (!isCStore) {
+             status = "state-good"; statusText = "N/A"; indicatorText = "No Pumps"; pillIcon = "➖";
+          } else {
+            if (pumpStatus === "overdue") { status = "state-overdue"; statusText = "Overdue"; indicatorText = `${pumpDays}d overdue`; pillIcon = "⚠️"; }
+            else if (pumpStatus === "good") { status = "state-good"; statusText = "Completed"; indicatorText = `${pumpDays}d ago`; pillIcon = "✅"; }
+            else { status = "state-none"; statusText = (gasChanged === "yes" || dieselChanged === "yes") ? "Partial" : "Pending"; indicatorText = pumpDays !== null ? `${pumpDays}d ago` : "Never Changed"; }
+          }
+        } else {
+          const isACOver = acStatus === "state-overdue";
+          const isPumpOver = isCStore && pumpStatus === "overdue";
+          if (isACOver || isPumpOver) {
+            status = "state-overdue"; statusText = "Overdue";
+            const max = Math.max(acDays || 0, pumpDays || 0);
+            indicatorText = `${max}d overdue`; pillIcon = "⚠️";
+          } else if (acStatus === "state-none" || (isCStore && pumpStatus === "pending")) {
+            status = "state-none"; statusText = "Pending"; indicatorText = "Needs logging";
+          } else {
+            status = "state-good"; statusText = "Good";
+            const max = Math.max(acDays || 0, pumpDays || 0);
+            indicatorText = max > 0 ? `${max}d ago` : "Up to Date"; pillIcon = "✅";
+          }
+        }
+
+        return { id, ...store, acDays, pumpDays, acStatus, pumpStatus, isCStore, status, statusText, indicatorText, pillIcon, filterSize: acRec.filterSize || "", sizesList };
+      });
+
+      // Stats aggregates
+      const totCount = allMapped.length;
+      const eastCount = allMapped.filter(s => getStoreRegion(s) === "east").length;
+      const westCount = allMapped.filter(s => getStoreRegion(s) === "west").length;
+
+      // Update segment headings counts
+      const regAll = document.getElementById("region-all");
+      const regEast = document.getElementById("region-east");
+      const regWest = document.getElementById("region-west");
+      if (regAll && regEast && regWest) {
+        regAll.innerHTML = `<span>🌎</span><span>All Regions (${totCount})</span>`;
+        regEast.innerHTML = `<span>🏁</span><span>East TX (${eastCount})</span>`;
+        regWest.innerHTML = `<span>🌵</span><span>West TX (${westCount})</span>`;
+        
+        regAll.className = state.activeRegion === "all" ? "flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 py-2.5 px-2 rounded-2xl border text-[10px] sm:text-xs font-bold transition-all bg-slate-900 border-slate-900 text-white shadow-sm scale-[1.01]" : "flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 py-2.5 px-2 rounded-2xl border text-[10px] sm:text-xs font-bold transition-all bg-white border-slate-200 text-slate-600 hover:bg-slate-50";
+        regEast.className = state.activeRegion === "east" ? "flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 py-2.5 px-2 rounded-2xl border text-[10px] sm:text-xs font-bold transition-all bg-blue-600 border-blue-600 text-white shadow-sm scale-[1.01]" : "flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 py-2.5 px-2 rounded-2xl border text-[10px] sm:text-xs font-bold transition-all bg-white border-slate-200 text-slate-600 hover:bg-slate-50";
+        regWest.className = state.activeRegion === "west" ? "flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 py-2.5 px-2 rounded-2xl border text-[10px] sm:text-xs font-bold transition-all bg-amber-600 border-amber-600 text-white shadow-sm scale-[1.01]" : "flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 py-2.5 px-2 rounded-2xl border text-[10px] sm:text-xs font-bold transition-all bg-white border-slate-200 text-slate-600 hover:bg-slate-50";
+      }
+
+      // Filter implementations
+      let filtered = [...allMapped];
+      if (state.activeTab === "pump" && state.activeDepartment === "all") {
+        filtered = filtered.filter(s => s.isCStore);
+      }
+      if (state.searchQuery.trim()) {
+        const q = state.searchQuery.toLowerCase().trim();
+        filtered = filtered.filter(s => (s.storeName || "").toLowerCase().includes(q) || (s.storeNumber || "").toLowerCase().includes(q) || (s.filterSize || "").toLowerCase().includes(q));
+      }
+      if (state.activeFilter !== "all") {
+        filtered = filtered.filter(s => {
+          if (state.activeFilter === "overdue") return s.status === "state-overdue";
+          if (state.activeFilter === "none") return s.status === "state-none";
+          if (state.activeFilter === "good") return s.status === "state-good";
+          if (state.activeFilter === "missingsizes") return s.sizesList.length === 0;
+          return true;
+        });
+      }
+      if (state.activeDepartment !== "all") {
+        filtered = filtered.filter(s => getStoreCategory(s.storeName) === state.activeDepartment);
+      }
+      if (state.activeRegion !== "all") {
+        filtered = filtered.filter(s => getStoreRegion(s) === state.activeRegion);
+      }
+      if (state.activeSize !== "all") {
+        filtered = filtered.filter(s => s.sizesList.some(item => (item.size || "").toUpperCase() === state.activeSize.toUpperCase()));
+      }
+
+      // Sorting sequence
+      filtered.sort((a, b) => {
+        const getPrio = (s) => s.status === "state-overdue" ? 1 : s.status === "state-none" ? 2 : 3;
+        const prioDiff = getPrio(a) - getPrio(b);
+        if (prioDiff !== 0) return prioDiff;
+        const nA = parseInt(a.storeNumber.replace(/\D/g, "")) || 0;
+        const nB = parseInt(b.storeNumber.replace(/\D/g, "")) || 0;
+        return nA - nB;
+      });
+
+      // Update counters in dropdown select tags
+      const selectSt = document.getElementById("select-status");
+      if (selectSt) {
+        const ov = allMapped.filter(s => s.status === "state-overdue").length;
+        const pe = allMapped.filter(s => s.status === "state-none").length;
+        const gd = allMapped.filter(s => s.status === "state-good").length;
+        const ms = allMapped.filter(s => s.sizesList.length === 0).length;
+        selectSt.innerHTML = `
+          <option value="all" ${state.activeFilter === "all" ? "selected" : ""}>All Statuses (${filtered.length})</option>
+          <option value="overdue" ${state.activeFilter === "overdue" ? "selected" : ""}>⚠️ Overdue (${ov})</option>
+          <option value="none" ${state.activeFilter === "none" ? "selected" : ""}>⏱️ Pending (${pe})</option>
+          <option value="good" ${state.activeFilter === "good" ? "selected" : ""}>✅ Up to Date (${gd})</option>
+          <option value="missingsizes" ${state.activeFilter === "missingsizes" ? "selected" : ""}>⚠️ Missing Sizes (${ms})</option>
+        `;
+      }
+
+      // Dynamic required size dropdown
+      const activeSizeLabel = document.getElementById("active-size-label");
+      if (activeSizeLabel) {
+        activeSizeLabel.innerText = state.activeSize === "all" ? "📏 All Sizes" : `📏 Size: ${state.activeSize}`;
+      }
+
+      const sizeMenu = document.getElementById("size-dropdown-menu");
+      if (sizeMenu) {
+        if (state.showSizeDropdown) {
+          const uniqSet = new Set();
+          allMapped.forEach(s => s.sizesList.forEach(item => { if (item.size) uniqSet.add(item.size.trim().toUpperCase()); }));
+          const uniqSizes = Array.from(uniqSet).sort();
+          sizeMenu.className = "absolute top-full right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 min-w-[180px] max-h-[220px] overflow-y-auto py-1 animate-fade-in block";
+          sizeMenu.innerHTML = `
+            <div onclick="window.setActiveSize('all')" class="p-2.5 text-xs font-semibold hover:bg-slate-50 border-b border-slate-100 cursor-pointer flex justify-between items-center text-slate-800">
+              <span>All Sizes</span>
+              <span class="text-slate-400">(${allMapped.length})</span>
+            </div>
+            ${uniqSizes.map(sz => {
+              const ct = allMapped.filter(s => s.sizesList.some(item => (item.size || "").toUpperCase() === sz)).length;
+              return `
+                <div onclick="window.setActiveSize('${sz}')" class="p-2.5 text-xs hover:bg-slate-50 cursor-pointer flex justify-between items-center text-slate-700 border-b border-slate-50">
+                  <div class="scale-90 origin-left">${renderDimensionBadges(sz)}</div>
+                  <span class="text-[10px] font-bold text-slate-400">${ct}</span>
+                </div>
+              `;
+            }).join("")}
+          `;
+        } else {
+          sizeMenu.className = "hidden";
+        }
+      }
+
+      // Populate Cards Grid container
+      const grid = document.getElementById("cards-grid-container");
+      if (grid) {
+        if (filtered.length === 0) {
+          grid.className = "w-full";
+          grid.innerHTML = `
+            <div class="bg-white border rounded-2xl p-12 text-center shadow-xs border-dashed border-slate-200 max-w-lg mx-auto w-full">
+              ${iconInfo}
+              <h3 class="text-sm font-bold text-slate-800">No Stores Found</h3>
+              <p class="text-xs text-slate-500 mt-1">Try refining your search terms or selecting a different status/region filter.</p>
+            </div>
+          `;
+        } else {
+          grid.className = "";
+          grid.innerHTML = `
+            <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3.5 w-full">
+              ${filtered.map(store => {
+                let statusBadge = "bg-amber-100/90 text-amber-900 border-amber-300 font-bold";
+                let cardStyles = "bg-amber-100 hover:bg-amber-150 border-amber-300 text-amber-955 border-2";
+                let numBadgeClass = "bg-white/70 border-amber-350 text-amber-955";
+
+                if (store.status === "state-overdue") {
+                  statusBadge = "bg-rose-150 text-rose-900 border-rose-350 font-bold";
+                  cardStyles = "bg-rose-100 hover:bg-rose-150 border-rose-350 text-rose-955 border-2 animate-pulse-slow";
+                  numBadgeClass = "bg-white/70 border-rose-350 text-rose-935";
+                } else if (store.status === "state-good") {
+                  statusBadge = "bg-emerald-150 text-emerald-950 border-emerald-300 font-bold";
+                  cardStyles = "bg-emerald-100 hover:bg-emerald-150 border-emerald-350 text-emerald-955 border-2";
+                  numBadgeClass = "bg-white/70 border-emerald-350 text-emerald-935";
+                }
+
+                const cat = getStoreCategory(store.storeName);
+                const deptLabel = cat === "fastfood" ? "🍔 Fast Food" : cat === "carwash" ? "🧼 Car Wash" : "🏪 C-Store";
+                const missSizes = store.sizesList.length === 0;
+
+                const sizesGroup = {};
+                store.sizesList.forEach(s => { sizesGroup[s.size] = (sizesGroup[s.size] || 0) + (parseInt(s.qty, 10) || 4); });
+                const sizeEntries = Object.entries(sizesGroup);
+
+                const sizesPreview = missSizes
+                  ? `<div class="text-[9px] font-bold text-red-700 bg-red-50 border border-red-150 rounded px-1.5 py-0.5 flex items-center gap-1 mt-1.5 w-fit">
+                      ${iconAlertTriangle}<span>Missing Sizes</span>
+                    </div>`
+                  : `<div class="mt-2.5 flex flex-wrap gap-1 items-center max-h-[44px] overflow-hidden">
+                      ${sizeEntries.slice(0, 3).map(([sz, qty]) => `
+                        <div class="bg-white/50 border border-black/5 p-1 rounded-md text-[9px] text-slate-650 flex items-center gap-0.5 font-bold">
+                          <span class="font-black text-blue-700 font-mono">(${qty})</span>
+                          <span>${sz}</span>
+                        </div>
+                      `).join("")}
+                      ${sizeEntries.length > 3 ? `<span class="text-[9px] text-slate-400 font-bold font-mono">...</span>` : ""}
+                    </div>`;
+
+                const dualStatus = state.activeTab === "all"
+                  ? `<div class="mt-2.5 flex flex-col gap-1.5 text-[10px] bg-white/70 p-2 rounded-xl border border-black/5 font-sans">
+                      <div class="flex items-center justify-between">
+                        <span class="font-bold text-slate-705">AC Filters:</span>
+                        <span class="px-1.5 py-0.5 rounded-md font-black text-[9px] ${store.acStatus === "state-overdue" ? "text-rose-700 bg-rose-50 border border-rose-150" : store.acStatus === "state-good" ? "text-emerald-700 bg-emerald-50 border border-emerald-150" : "text-amber-700 bg-amber-50 border border-amber-150"}">
+                          ${store.acStatus === "state-overdue" ? "⚠️ Overdue" : store.acStatus === "state-good" ? "✅ Good" : "⏱️ Pending"}
+                        </span>
+                      </div>
+                      ${store.isCStore ? `
+                        <div class="flex items-center justify-between border-t border-black/5 pt-1.5">
+                          <span class="font-bold text-slate-705">Pump Filters:</span>
+                          <span class="px-1.5 py-0.5 rounded-md font-black text-[9px] ${store.pumpStatus === "overdue" ? "text-rose-700 bg-rose-50 border border-rose-150" : store.pumpStatus === "good" ? "text-emerald-700 bg-emerald-50 border border-emerald-150" : "text-amber-700 bg-amber-50 border border-amber-150"}">
+                            ${store.pumpStatus === "overdue" ? "⚠️ Overdue" : store.pumpStatus === "good" ? "✅ Complete" : "⏱️ Pending"}
+                          </span>
+                        </div>
+                      ` : ""}
+                    </div>`
+                  : "";
+
+                return `
+                  <div onclick="window.openStore('${store.id}')" class="border p-3 rounded-2xl cursor-pointer shadow-3xs hover:shadow-2xs transition-all flex flex-col justify-between hover:translate-y-[-1px] ${cardStyles}">
+                    
+                    <!-- Mobile View -->
+                    <div class="sm:hidden flex flex-col justify-between h-full min-h-[110px] w-full">
+                      <div>
+                        <div class="flex items-center justify-between gap-1 mb-1.5">
+                          <span class="font-mono text-[9px] font-bold border px-1 py-0.5 rounded leading-none ${numBadgeClass}">#${store.storeNumber || "?"}</span>
+                          <span class="text-[8px] font-black uppercase px-1.5 py-0.5 rounded border leading-none ${statusBadge}">${store.pillIcon} ${store.statusText}</span>
+                        </div>
+                        <h4 class="text-[11px] font-black text-slate-900 leading-tight line-clamp-2">${formatStoreNameDisplay(store.storeName)}</h4>
+                      </div>
+                      ${state.activeTab === "all" ? `
+                        <div class="mt-1 flex flex-col gap-0.5 text-[8px] bg-white/70 p-1.5 rounded-lg border border-black/5 font-bold text-slate-800">
+                          <div class="flex justify-between">
+                            <span>AC:</span>
+                            <span class="${store.acStatus === "state-overdue" ? "text-rose-700" : store.acStatus === "state-good" ? "text-emerald-700" : "text-amber-700"}">${store.acStatus === "state-overdue" ? "OVERDUE" : store.acStatus === "state-good" ? "OK" : "PENDING"}</span>
+                          </div>
+                          ${store.isCStore ? `
+                            <div class="flex justify-between border-t border-black/5 pt-0.5">
+                              <span>Pump:</span>
+                              <span class="${store.pumpStatus === "overdue" ? "text-rose-700" : store.pumpStatus === "good" ? "text-emerald-700" : "text-amber-700"}">${store.pumpStatus === "overdue" ? "OVERDUE" : store.pumpStatus === "good" ? "OK" : "PENDING"}</span>
+                            </div>
+                          ` : ""}
+                        </div>
+                      ` : `
+                        <div class="border-t border-black/5 pt-1 mt-2 text-[8px] text-slate-600 flex justify-between font-bold">
+                          <span>Activity</span>
+                          <span class="${store.status === "state-overdue" ? "text-rose-750" : store.status === "state-good" ? "text-emerald-750" : "text-amber-700"}">${store.indicatorText}</span>
+                        </div>
+                      `}
+                    </div>
+
+                    <!-- Desktop View -->
+                    <div class="hidden sm:flex flex-col justify-between h-full w-full">
+                      <div>
+                        <div class="flex items-center justify-between gap-1.5 mb-2.5 flex-wrap">
+                          <div class="flex items-center gap-1.5">
+                            <span class="font-mono text-[9px] font-bold border px-1.5 py-0.5 rounded shadow-3xs leading-none ${numBadgeClass}">#${store.storeNumber || "?"}</span>
+                            <span class="text-[9px] uppercase font-black tracking-wider text-slate-500">${deptLabel}</span>
+                          </div>
+                          <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-lg border text-center tracking-wider leading-none ${statusBadge}">${store.pillIcon} ${store.statusText}</span>
+                        </div>
+                        <h4 class="text-xs font-black text-slate-900 leading-snug truncate" title="${store.storeName}">${formatStoreNameDisplay(store.storeName)}</h4>
+                        ${sizesPreview}
+                        ${dualStatus}
+                      </div>
+                      <div class="border-t border-black/5 pt-2 mt-3 flex items-center justify-between text-[10px] font-bold text-slate-600">
+                        <span>Last Changed</span>
+                        <span class="font-mono text-[9px]">${store.indicatorText}</span>
+                      </div>
+                    </div>
+
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          `;
+        }
+      }
+    }
+
+    function renderBulkImporter() {
+      const matchedCount = state.parsedMatches.filter(m => m.matchedStore !== null).length;
+      return `
+        <div class="flex flex-col gap-6 w-full max-w-5xl mx-auto p-4 animate-fade-in bg-slate-50 min-h-[70vh]">
+          <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col gap-4">
+            <div class="flex justify-between items-start flex-wrap gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <span class="text-blue-600 bg-blue-50 p-1.5 rounded-lg inline-flex">${iconWrench}</span>
+                  Master Filter Sizes Importer
+                </h2>
+                <p class="text-xs text-slate-500 mt-1">
+                  Paste multi-line filter configurations from spreadsheets, emails, or tables to instantly update stores in bulk.
+                </p>
+              </div>
+              <div class="flex gap-2">
+                <button onclick="window.loadBulkImportSample()" class="bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 text-xs font-semibold px-3.5 py-1.5 rounded-lg transition-all">
+                  📋 Load Sample Data
+                </button>
+                <button onclick="window.clearBulkImport()" class="border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1">
+                  ${iconTrash2}
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-800 leading-relaxed">
+              <div class="font-bold mb-1 flex items-center gap-1.5">
+                ${iconCheck}
+                Expected Copy &amp; Paste Format:
+              </div>
+              <p>
+                Copy columns directly from spreadsheets or lists. Lines with a store name/number specify the restaurant.
+                Subsequent rows specify unit, size, and quantities automatically.
+              </p>
+              <pre class="bg-white border border-emerald-100 rounded-lg p-2.5 font-mono text-[10px] text-slate-700 mt-2 whitespace-pre overflow-x-auto">Burger King #26183 Denton\t1\t20x20x2\t4\n\t2\t16x16x2\t4\nBurger King #22027 Alvord\t1\t16x25x1\t3</pre>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-bold text-slate-700">Paste Raw Spreadsheet Rows:</label>
+              <textarea id="bulk-text-input" oninput="window.bulkTextInputChanged(this.value)" class="w-full text-xs font-mono border border-slate-250 rounded-xl p-3 min-h-[160px] resize-y outline-none focus:border-slate-400 placeholder-slate-400" placeholder="Paste data here...">${state.bulkTextInput}</textarea>
+            </div>
+
+            <div class="flex justify-between items-center border-t border-slate-100 pt-4 flex-wrap gap-2">
+              <span class="text-[11px] font-semibold text-slate-500">
+                ${state.bulkTextInput.split(/\r?\n/).filter(line => line.trim()).length} line(s) pasted
+              </span>
+              <div class="flex gap-2">
+                <button onclick="window.closeBulkImport()" class="px-4 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-655 hover:bg-slate-100 transition-all font-sans">
+                  Close &amp; Cancel
+                </button>
+                <button onclick="window.analyzeBulkImport()" class="px-5 py-2 rounded-lg text-xs font-bold text-white bg-slate-950 hover:bg-slate-800 transition-all flex items-center gap-1.5 font-sans">
+                  ${iconPlay}
+                  Parse &amp; Match Stores
+                </button>
+              </div>
+            </div>
+          </div>
+
+          ${state.isAnalyzed && state.parsedMatches.length > 0 ? `
+            <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col gap-4 animate-fade-in">
+              <div class="flex justify-between items-center flex-wrap gap-4 border-b border-slate-100 pb-3">
+                <div>
+                  <h3 class="text-sm font-bold text-slate-800">Matched Results Preview</h3>
+                  <p class="text-[11px] text-slate-500">Review matched stores and parsed filters before implementing the changes.</p>
+                </div>
+                <button onclick="window.commitBulkImport()" ${state.isBulkSaving || matchedCount === 0 ? "disabled" : ""} class="px-5 py-2.5 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 transition-all flex items-center gap-1.5 font-sans cursor-pointer">
+                  ${state.isBulkSaving ? `<span class="inline-block h-3 w-3 border-2 border-white/55 border-t-white rounded-full animate-spin"></span>` : iconCheck}
+                  Import Configured Filters (${matchedCount} matched)
+                </button>
+              </div>
+
+              <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs border-collapse font-sans">
+                  <thead>
+                    <tr class="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wider font-bold border-b border-slate-150">
+                      <th class="p-3">Import Row Store Header</th>
+                      <th class="p-3">Matched System Store</th>
+                      <th class="p-3">Filter Size Breakdown</th>
+                      <th class="p-3 text-right">Total Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${state.parsedMatches.map((match, idx) => `
+                      <tr class="border-b border-slate-100 align-top hover:bg-slate-50/50">
+                        <td class="p-3 font-semibold text-slate-800">${match.rawName}</td>
+                        <td class="p-3">
+                          <div class="mb-1.5">
+                            ${match.matchedStore ? `
+                              <span class="bg-emerald-50 text-emerald-800 text-[9px] font-extrabold px-2 py-0.5 rounded-full border border-emerald-100 tracking-wider uppercase">Matched</span>
+                            ` : `
+                              <span class="bg-rose-50 text-rose-800 text-[9px] font-extrabold px-2 py-0.5 rounded-full border border-rose-100 tracking-wider uppercase">Not Found</span>
+                            `}
+                          </div>
+                          ${match.matchedStore ? `
+                            <div>
+                              <div class="font-bold text-slate-900">${formatStoreNameDisplay(match.matchedStore.storeName)}</div>
+                              <div class="text-[11px] text-slate-500 font-mono">Store Number: #${match.matchedStore.storeNumber}</div>
+                            </div>
+                          ` : `
+                            <div class="text-rose-500 text-[11px] font-semibold flex items-center gap-1">
+                              ${iconAlertTriangle}
+                              No matching store in database
+                            </div>
+                          `}
+                        </td>
+                        <td class="p-3 max-w-sm">
+                          <div class="font-bold text-slate-850 text-[11px] text-blue-900 mb-1">
+                            Summary: ${match.summary || "No filters parsed"}
+                          </div>
+                          <div class="text-[10px] text-slate-500 pt-1 border-t border-dashed border-slate-100 flex flex-wrap gap-x-2.5 gap-y-1">
+                            ${match.items.map(it => `
+                              <span class="inline-flex items-center gap-1">Unit ${it.unit}: <strong>${it.size}</strong> [Qty ${it.qty}]</span>
+                            `).join("")}
+                          </div>
+                        </td>
+                        <td class="p-3 text-right font-mono font-bold text-slate-800">
+                          ${match.items.reduce((acc, current) => acc + (parseInt(current.qty, 10) || 0), 0)} pcs
+                        </td>
+                      </tr>
+                    `).join("")}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ` : ""}
+        </div>
+      `;
+    }
+
+    function renderStoreDetailsModal() {
+      const store = restaurants[state.selectedStoreId];
+      if (!store) return "";
+
+      const safeKey = getFirebaseSafePathKey(store.storeNumber);
+      const isCStore = getStoreCategory(store.storeName) === "cstore";
+      const acRec = acRecords[safeKey] || {};
+
+      let parsedSizes = [];
+      try {
+        if (acRec.filterSizesList) parsedSizes = JSON.parse(acRec.filterSizesList);
+      } catch(e){}
+      if (parsedSizes.length === 0 && acRec.filterSize) {
+        parsedSizes = acRec.filterSize.split(/,\s*/).map((part, index) => {
+          const match = part.trim().match(/^\((\d+)\)\s*(.*)$/);
+          return {
+            unit: String(index + 1),
+            size: match ? match[2].trim().toUpperCase() : part.trim().toUpperCase(),
+            qty: match ? match[1].trim() : "4"
+          };
+        });
+      }
+
+      const sizeSummaryMap = {};
+      parsedSizes.forEach(s => {
+        const norm = (s.size || "").trim().toUpperCase();
+        if (!norm) return;
+        const q = parseInt(s.qty, 10) || 4;
+        sizeSummaryMap[norm] = (sizeSummaryMap[norm] || 0) + q;
+      });
+
+      const hasConfiguredSizes = parsedSizes.length > 0;
+
+      return `
+        <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-3xs flex items-center justify-center p-4 z-50">
+          <div class="bg-white rounded-2xl w-full max-w-lg shadow-xl border border-slate-200 overflow-hidden flex flex-col max-h-[96vh] animate-fade-in">
+            
+            <!-- Modal Header -->
+            <div class="bg-slate-50 border-b border-slate-200 px-5 py-3.5 flex items-center justify-between gap-4">
+              <div class="min-w-0">
+                <span class="bg-slate-200 text-slate-800 text-[10px] font-extrabold px-2.5 py-0.5 rounded-sm border border-slate-300 font-mono tracking-wider">
+                  Store Unit #${store.storeNumber || "N/A"}
+                </span>
+                <h3 class="text-base font-bold text-slate-900 mt-1 truncate">
+                  ${formatStoreNameDisplay(store.storeName)}
+                </h3>
+              </div>
+              <button onclick="window.closeStoreModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-full transition-all hover:bg-slate-100">
+                ${iconX}
+              </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-5 overflow-y-auto flex flex-col gap-4">
+              
+              <!-- Compact GPS and Contact Row -->
+              ${store.address ? `
+                <div class="bg-slate-50 border border-slate-150 rounded-xl p-3 flex flex-col gap-2.5">
+                  <div class="text-xs text-slate-700 font-medium leading-relaxed">
+                    <span class="font-extrabold text-slate-400 text-[9px] uppercase block tracking-wider mb-0.5">STORE LOCATION</span>
+                    ${store.address}
+                  </div>
+                  <div class="flex gap-2">
+                    <a href="https://maps.google.com/?q=${encodeURIComponent(store.address)}" target="_blank" rel="noreferrer" class="flex-1 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-850 text-white font-bold py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 shadow-3xs transition-all text-xs text-center cursor-pointer select-none">
+                      ${iconMapPin}
+                      GPS Map
+                    </a>
+                    ${store.phone ? `
+                      <a href="tel:${store.phone}" class="flex-1 bg-blue-50 border border-blue-150 text-blue-700 font-bold hover:bg-blue-100 py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 shadow-3xs transition-all text-xs text-center cursor-pointer select-none">
+                        📞 Call Store
+                      </a>
+                    ` : ""}
+                  </div>
+                </div>
+              ` : ""}
+
+              <!-- Required Filter Sizes Configuration section (Prominent above questions) -->
+              <div class="border border-slate-200 p-2.5 rounded-xl bg-slate-50/50">
+                <button type="button" onclick="window.toggleModalSizesSection()" class="w-full flex items-center justify-between text-xs font-black text-slate-700 hover:text-slate-900 transition-colors py-1 cursor-pointer select-none font-sans">
+                  <span class="flex items-center gap-1.5 uppercase tracking-wider text-[10px] text-slate-500 font-extrabold">
+                    📏 ${state.modalShowSizesSection ? "📂 Hide Filter Sizes Configuration" : "⚙️ View Required Filter Sizes"}
+                  </span>
+                  <span class="text-slate-400 text-xs">${state.modalShowSizesSection ? "▲" : "▼"}</span>
+                </button>
+
+                ${state.modalShowSizesSection ? `
+                  <div class="flex flex-col gap-2 mt-2 pt-2 border-t border-slate-200 animate-fade-in">
+                    <div class="flex justify-between items-center">
+                      <span class="text-xs font-bold text-slate-800">Sizes Configuration</span>
+                      ${!state.modalShowAddSizes ? `
+                        <div class="flex gap-1.5">
+                          <button onclick="window.initSizeEditMode()" class="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 rounded px-2 py-0.5 transition-all inline-flex items-center gap-0.5 cursor-pointer">
+                            ${iconPlus}
+                            ${hasConfiguredSizes ? "Edit" : "Add"}
+                          </button>
+                          ${hasConfiguredSizes ? `
+                            <button onclick="window.clearModalSizes()" class="text-[10px] font-bold text-red-700 bg-red-50 border border-red-200 hover:bg-red-105 rounded px-2 py-0.5 transition-all text-center cursor-pointer">
+                              Reset
+                            </button>
+                          ` : ""}
+                        </div>
+                      ` : ""}
+                    </div>
+
+                    ${!state.modalShowAddSizes ? `
+                      <div class="bg-white border border-slate-200 rounded-xl p-3 min-h-[40px] flex flex-col justify-center gap-2">
+                        ${!hasConfiguredSizes ? `
+                          <span class="text-xs text-slate-400 italic text-center">No Filter Sizes Registered</span>
+                        ` : `
+                          <div class="flex flex-col gap-2">
+                            ${Object.entries(sizeSummaryMap).map(([size, total]) => `
+                              <div class="flex items-center justify-between bg-slate-50 border border-slate-150 rounded-lg p-2">
+                                <span class="text-xs font-extrabold text-slate-800 inline-flex items-center gap-1 leading-none">
+                                  <span class="text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 font-mono text-[11px] font-bold leading-none rounded">${total}</span>
+                                  ×
+                                </span>
+                                ${renderDimensionBadges(size)}
+                              </div>
+                            `).join("")}
+                          </div>
+
+                          <div class="flex justify-center mt-1">
+                            <button type="button" onclick="window.toggleModalShowUnitDetails()" class="text-[10px] font-bold text-slate-500 hover:text-slate-800 bg-slate-100 px-2.5 py-1 border border-slate-200 rounded transition-all focus:outline-none cursor-pointer">
+                              ${state.modalShowUnitDetails ? "❌ Hide Details" : "🔍 Show Unit Details"}
+                            </button>
+                          </div>
+
+                          ${state.modalShowUnitDetails ? `
+                            <div class="flex flex-col gap-1.5 pt-2 border-t border-slate-200">
+                              ${parsedSizes.map((row) => `
+                                <div class="flex justify-between items-center text-xs bg-slate-100/50 p-1.5 rounded border border-slate-150">
+                                  <span class="font-semibold text-slate-705">
+                                    Unit ${row.unit}: <span class="text-[10px] bg-white border px-1.5 py-0.5 font-bold rounded">Qty: ${row.qty}</span>
+                                  </span>
+                                  ${renderDimensionBadges(row.size)}
+                                </div>
+                              `).join("")}
+                            </div>
+                          ` : ""}
+                        `}
+                      </div>
+                    ` : `
+                      <div class="bg-white border border-blue-150 rounded-xl p-3 flex flex-col gap-2">
+                        <div class="grid grid-cols-12 gap-1 text-[10px] uppercase font-bold text-slate-500 text-center">
+                          <span class="col-span-3 text-left">Unit #</span>
+                          <span class="col-span-6">Size</span>
+                          <span class="col-span-2">Qty</span>
+                          <span class="col-span-1"></span>
+                        </div>
+                        <div class="flex flex-col gap-2 max-h-[160px] overflow-y-auto pr-[2px]">
+                          ${state.modalAddSizeRows.map((row, idx) => `
+                            <div class="grid grid-cols-12 gap-1.5 items-center">
+                              <input type="text" placeholder="1" value="${row.unit}" oninput="window.updateModalSizeRow(${idx}, 'unit', this.value)" class="col-span-3 text-center border border-slate-200 rounded bg-white px-1.5 py-1 text-xs" />
+                              <input type="text" placeholder="20X20X2" value="${row.size}" oninput="window.updateModalSizeRow(${idx}, 'size', this.value)" class="col-span-6 text-center border border-slate-200 rounded bg-white px-2 py-1 text-xs uppercase" />
+                              <input type="number" placeholder="4" value="${row.qty}" oninput="window.updateModalSizeRow(${idx}, 'qty', this.value)" class="col-span-2 text-center border border-slate-200 rounded bg-white px-1 py-1 text-xs" min="1" />
+                              <button type="button" onclick="window.deleteModalSizeRow(${idx})" class="col-span-1 p-1 text-red-500 hover:text-red-705 hover:bg-red-50 rounded cursor-pointer" title="Delete row">
+                                ${iconX}
+                              </button>
+                            </div>
+                          `).join("")}
+                        </div>
+                        <div class="flex justify-between items-center border-t border-slate-200 pt-2.5 mt-1.5 gap-2 flex-wrap">
+                          <button type="button" onclick="window.addModalSizeRow()" class="text-xs font-semibold px-2.5 py-1 border border-slate-200 hover:bg-slate-100 rounded cursor-pointer">➕ Add Row</button>
+                          <div class="flex gap-2">
+                            <button type="button" onclick="window.cancelModalSizesEdit()" class="text-xs px-2 py-1 border border-slate-200 rounded cursor-pointer">Cancel</button>
+                            <button type="button" onclick="window.saveModalSizes()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1 rounded cursor-pointer">💾 Save</button>
+                          </div>
+                        </div>
+                      </div>
+                    `}
+                  </div>
+                ` : ""}
+              </div>
+
+              <!-- Question Flow Section -->
+              <div class="flex flex-col gap-3">
+                
+                <!-- Question 1: AC Filters Changed -->
+                <div class="flex flex-col gap-1.5 p-3 rounded-xl bg-slate-50 border border-slate-150 shadow-3xs">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-black text-slate-800">Did you change the AC filters today?</span>
+                    ${state.modalAcChanged === "yes" && state.modalDateStr ? `
+                      <span class="text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded leading-none">CHANGED</span>
+                    ` : ""}
+                  </div>
+                  <div class="flex items-center gap-2 mt-1">
+                    <div class="flex bg-slate-200/50 p-0.5 rounded-lg border border-slate-250 flex-1 items-center gap-0.5">
+                      <button type="button" onclick="window.onModalAcChanged('yes')" class="flex-1 py-1 text-xs font-bold rounded-md transition-all cursor-pointer select-none ${state.modalAcChanged === "yes" ? "bg-emerald-600 text-white shadow-3xs" : "text-slate-600 hover:text-slate-800 bg-transparent"}">Yes</button>
+                      <div class="w-[1px] h-3.5 bg-slate-350 shrink-0 self-center"></div>
+                      <button type="button" onclick="window.onModalAcChanged('no')" class="flex-1 py-1 text-xs font-bold rounded-md transition-all cursor-pointer select-none ${state.modalAcChanged === "no" ? "bg-rose-600 text-white shadow-3xs" : "text-slate-600 hover:text-slate-800 bg-transparent"}">No</button>
+                    </div>
+
+                    <!-- Date Picker Overlay -->
+                    <div class="relative flex items-center justify-center border border-slate-250 bg-white hover:bg-slate-50 rounded-lg w-9 h-8 shrink-0 cursor-pointer shadow-3xs transition-all">
+                      <span class="pointer-events-none">${iconCalendar}</span>
+                      <input type="date" value="${state.modalDateStr}" onchange="window.onModalDateChanged(this.value)" class="opacity-0 w-full h-full cursor-pointer absolute inset-0" />
+                    </div>
+                  </div>
+                  ${state.modalAcChanged === "yes" && state.modalDateStr ? `
+                    <div class="text-[10px] font-mono font-extrabold text-slate-500 bg-white border border-slate-200 px-2.5 py-0.5 rounded-md self-start">📅 Logged Change Code: ${state.modalDateStr === getChicagoTodayDateString() ? "Today" : state.modalDateStr}</div>
+                  ` : ""}
+                </div>
+
+                <!-- Question 2: AC Coils Cleaned -->
+                <div class="flex flex-col gap-1.5 p-3 rounded-xl bg-slate-50 border border-slate-150 shadow-3xs">
+                  <div class="flex items-center justify-between gap-1.5">
+                    <span class="text-xs font-black text-slate-800">Were the AC coils cleaned today?</span>
+                    ${state.modalCoilsCleaned === "yes" && state.modalCoilsCleanedDate ? `
+                      <span class="text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 px-2 py-0.5 rounded leading-none">CLEANED</span>
+                    ` : ""}
+                  </div>
+                  <div class="flex items-center gap-2 mt-1">
+                    <div class="flex bg-slate-200/50 p-0.5 rounded-lg border border-slate-250 flex-1 items-center gap-0.5">
+                      <button type="button" onclick="window.onModalCoilsCleaned('yes')" class="flex-1 py-1 text-xs font-bold rounded-md transition-all cursor-pointer select-none ${state.modalCoilsCleaned === "yes" ? "bg-emerald-600 text-white shadow-3xs" : "text-slate-600 hover:text-slate-800 bg-transparent"}">Yes</button>
+                      <div class="w-[1px] h-3.5 bg-slate-350 shrink-0 self-center"></div>
+                      <button type="button" onclick="window.onModalCoilsCleaned('no')" class="flex-1 py-1 text-xs font-bold rounded-md transition-all cursor-pointer select-none ${state.modalCoilsCleaned === "no" ? "bg-rose-600 text-white shadow-3xs" : "text-slate-600 hover:text-slate-800 bg-transparent"}">No</button>
+                    </div>
+
+                    <!-- Date Picker overlay -->
+                    <div class="relative flex items-center justify-center border border-slate-250 bg-white hover:bg-slate-50 rounded-lg w-9 h-8 shrink-0 cursor-pointer shadow-3xs transition-all">
+                      <span class="pointer-events-none">${iconCalendar}</span>
+                      <input type="date" value="${state.modalCoilsCleanedDate}" onchange="window.onModalCoilsCleanedDateChanged(this.value)" class="opacity-0 w-full h-full cursor-pointer absolute inset-0" />
+                    </div>
+                  </div>
+                  ${state.modalCoilsCleaned === "yes" && state.modalCoilsCleanedDate ? `
+                    <div class="text-[10px] font-mono font-extrabold text-slate-500 bg-white border border-slate-200 px-2.5 py-0.5 rounded-md self-start">📅 Logged Cleaning Code: ${state.modalCoilsCleanedDate === getChicagoTodayDateString() ? "Today" : state.modalCoilsCleanedDate}</div>
+                  ` : ""}
+                </div>
+
+                <!-- Questions 3 & 4 (Convenience Store pumps sizes filters) -->
+                ${isCStore ? `
+                  <!-- Question 3: Gas Filters Changed -->
+                  <div class="flex flex-col gap-1.5 p-3 rounded-xl bg-slate-50 border border-slate-150 shadow-3xs">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-xs font-black text-slate-800">Were the gas filters changed today?</span>
+                      ${state.modalGasChanged === "yes" && state.modalGasDateStr ? `
+                        <span class="text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded leading-none">CHANGED</span>
+                      ` : ""}
+                    </div>
+                    <div class="flex items-center gap-2 mt-1">
+                      <div class="flex bg-slate-200/50 p-0.5 rounded-lg border border-slate-250 flex-1 items-center gap-0.5">
+                        <button type="button" onclick="window.onModalGasChanged('yes')" class="flex-1 py-1 text-xs font-bold rounded-md transition-all cursor-pointer select-none ${state.modalGasChanged === "yes" ? "bg-emerald-600 text-white shadow-3xs" : "text-slate-600 hover:text-slate-800 bg-transparent"}">Yes</button>
+                        <div class="w-[1px] h-3.5 bg-slate-350 shrink-0 self-center"></div>
+                        <button type="button" onclick="window.onModalGasChanged('no')" class="flex-1 py-1 text-xs font-bold rounded-md transition-all cursor-pointer select-none ${state.modalGasChanged === "no" ? "bg-rose-600 text-white shadow-3xs" : "text-slate-600 hover:text-slate-800 bg-transparent"}">No</button>
+                      </div>
+
+                      <div class="relative flex items-center justify-center border border-slate-250 bg-white hover:bg-slate-50 rounded-lg w-9 h-8 shrink-0 cursor-pointer shadow-3xs transition-all">
+                        <span class="pointer-events-none">${iconCalendar}</span>
+                        <input type="date" value="${state.modalGasDateStr}" onchange="window.onModalGasDateChanged(this.value)" class="opacity-0 w-full h-full cursor-pointer absolute inset-0" />
+                      </div>
+                    </div>
+                    ${state.modalGasChanged === "yes" && state.modalGasDateStr ? `
+                      <div class="text-[10px] font-mono font-extrabold text-slate-500 bg-white border border-slate-200 px-2.5 py-0.5 rounded-md self-start">📅 Logged Gas Code: ${state.modalGasDateStr === getChicagoTodayDateString() ? "Today" : state.modalGasDateStr}</div>
+                    ` : ""}
+                  </div>
+
+                  <!-- Question 4: Diesel Filters Changed -->
+                  <div class="flex flex-col gap-1.5 p-3 rounded-xl bg-slate-50 border border-slate-150 shadow-3xs">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-xs font-black text-slate-800">Were the diesel filters changed today?</span>
+                      ${state.modalDieselChanged === "yes" && state.modalDieselDateStr ? `
+                        <span class="text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 px-2 py-0.5 rounded leading-none">CHANGED</span>
+                      ` : ""}
+                    </div>
+                    <div class="flex items-center gap-2 mt-1">
+                      <div class="flex bg-slate-200/50 p-0.5 rounded-lg border border-slate-250 flex-1 items-center gap-0.5">
+                        <button type="button" onclick="window.onModalDieselChanged('yes')" class="flex-1 py-1 text-xs font-bold rounded-md transition-all cursor-pointer select-none ${state.modalDieselChanged === "yes" ? "bg-emerald-600 text-white shadow-3xs" : "text-slate-600 hover:text-slate-800 bg-transparent"}">Yes</button>
+                        <div class="w-[1px] h-3.5 bg-slate-350 shrink-0 self-center"></div>
+                        <button type="button" onclick="window.onModalDieselChanged('no')" class="flex-1 py-1 text-xs font-bold rounded-md transition-all cursor-pointer select-none ${state.modalDieselChanged === "no" ? "bg-rose-600 text-white shadow-3xs" : "text-slate-600 hover:text-slate-800 bg-transparent"}">No</button>
+                      </div>
+
+                      <div class="relative flex items-center justify-center border border-slate-250 bg-white hover:bg-slate-50 rounded-lg w-9 h-8 shrink-0 cursor-pointer shadow-3xs transition-all">
+                        <span class="pointer-events-none">${iconCalendar}</span>
+                        <input type="date" value="${state.modalDieselDateStr}" onchange="window.onModalDieselDateChanged(this.value)" class="opacity-0 w-full h-full cursor-pointer absolute inset-0" />
+                      </div>
+                    </div>
+                    ${state.modalDieselChanged === "yes" && state.modalDieselDateStr ? `
+                      <div class="text-[10px] font-mono font-extrabold text-slate-500 bg-white border border-slate-200 px-2.5 py-0.5 rounded-md self-start">📅 Logged Diesel Code: ${state.modalDieselDateStr === getChicagoTodayDateString() ? "Today" : state.modalDieselDateStr}</div>
+                    ` : ""}
+                  </div>
+                ` : ""}
+
+              </div>
+
+              <!-- Comments Column -->
+              <div class="flex flex-col gap-1.5 pt-1">
+                <div class="flex justify-between items-center">
+                  <label class="text-xs font-bold text-slate-800 flex items-center gap-1">
+                    <span class="text-slate-400">${iconMessageSquare}</span>
+                    Additional Comments (Optional)
+                  </label>
+                  <span id="comments-counter" class="text-[10px] text-slate-400 font-mono">${state.modalComments.length} / 250</span>
+                </div>
+                <textarea oninput="window.onModalCommentsChanged(this.value)" class="w-full text-xs border border-slate-250 rounded-xl p-3 min-h-[55px] max-h-[85px] resize-none outline-none focus:border-slate-400 font-sans" placeholder="Enter any extra comments here...">${state.modalComments}</textarea>
+              </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-slate-50 border-t border-slate-200 px-5 py-3.5 flex items-center justify-between gap-3 shrink-0">
+              <div>
+                ${acRec.lastFilterChangeTimestamp ? `
+                  <button type="button" onclick="window.clearLastChangeDate()" class="text-xs font-bold text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100/50 px-3 py-2 border border-rose-200 rounded-lg transition-all inline-flex items-center gap-1 shrink-0">
+                    Clear Change
+                  </button>
+                ` : ""}
+              </div>
+              <div class="flex gap-2.5 ml-auto">
+                <button onclick="window.closeStoreModal()" class="px-4 py-2 text-xs font-bold text-slate-655 border border-slate-200 hover:bg-slate-100 rounded-lg transition-all">Cancel</button>
+                <button onclick="window.saveModalAll()" ${state.modalSaving ? "disabled" : ""} class="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-all shadow-xs shrink-0 flex items-center gap-1.5">
+                  ${state.modalSaving ? `<span class="inline-block h-3 w-3 border-2 border-white/55 border-t-white rounded-full animate-spin"></span>` : iconCheck}
+                  Save
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      `;
+    }
+
+    // Streams registration
+    onValue(ref(db, "restaurants"), (snap) => {
+      restaurants = snap.val() || {};
+      loading = false;
+      render();
+    });
+    onValue(ref(db, "filterChanges"), (snap) => {
+      acRecords = snap.val() || {};
+      render();
+    });
+    onValue(ref(db, "gasCoverChanges"), (snap) => {
+      pumpRecords = snap.val() || {};
+      render();
+    });
+    onValue(ref(db, ".info/connected"), (snap) => {
+      online = !!snap.val();
+      render();
+    });
+
+    // Run first render cycle
+    render();
+  </script>
+</body>
+</html>
