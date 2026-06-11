@@ -54,9 +54,9 @@
           <button onclick="window.setActiveTab('pump')" id="tab-pump" class="px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all">Pump Filters</button>
         </div>
 
-        <div id="connection-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[10px] sm:text-xs font-semibold border transition-all">
-          <span id="connection-dot" class="h-2 w-2 rounded-full" />
-          <span id="connection-text" class="hidden sm:inline">Offline</span>
+        <div id="connection-badge" class="inline-flex items-center gap-1 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold border transition-all shrink-0">
+          <span id="connection-dot" class="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-rose-500 shrink-0"></span>
+          <span id="connection-text" class="font-mono text-[9px] sm:text-xs leading-none shrink-0">Offline</span>
         </div>
       </div>
     </div>
@@ -69,6 +69,20 @@
       <p class="text-xs font-semibold text-slate-500 tracking-wide uppercase">Hooking into Database Stream...</p>
     </div>
   </main>
+
+  <!-- Page Footer -->
+  <footer id="app-footer" class="bg-white border-t border-slate-200/80 py-4 px-4 sm:px-6 mt-auto shrink-0">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-400">
+      <div class="flex items-center gap-1 text-[10px] sm:text-xs font-medium">
+        <span>© 2026 DPM Filter Changes. All rights reserved.</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-bold font-mono bg-slate-50 hover:bg-slate-150 border border-slate-205 text-slate-500 transition-all cursor-default shadow-3xs hover:shadow-2xs">
+          <span>v1.0.8</span>
+        </span>
+      </div>
+    </div>
+  </footer>
 
   <!-- Modals Container -->
   <div id="modal-container"></div>
@@ -704,12 +718,12 @@ Burger King #27028 Gainesville\t1\t20x20x2\t4
       const label = document.getElementById("connection-text");
       if (badge && dot && label) {
         if (online) {
-          badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[10px] sm:text-xs font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200";
-          dot.className = "h-2 w-2 rounded-full bg-emerald-500 animate-pulse";
-          label.innerHTML = "Syncing Realtime &bull; <span class='text-[9px] text-emerald-600 font-extrabold uppercase ml-1'>Active</span>";
+          badge.className = "inline-flex items-center gap-1 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold border bg-emerald-50 text-emerald-700 border-emerald-250 shadow-3xs shrink-0";
+          dot.className = "h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-emerald-500 animate-pulse shrink-0";
+          label.innerHTML = `<span class="inline sm:hidden">Live</span><span class="hidden sm:inline md:hidden">Syncing</span><span class="hidden md:inline">Syncing Realtime &bull; <span class='text-[9px] text-emerald-600 font-extrabold uppercase ml-1 bg-emerald-100 px-1 rounded pb-0.5'>Active</span></span>`;
         } else {
-          badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[10px] sm:text-xs font-semibold border bg-rose-50 text-rose-700 border-rose-200";
-          dot.className = "h-2 w-2 rounded-full bg-rose-500";
+          badge.className = "inline-flex items-center gap-1 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold border bg-rose-50 text-rose-700 border-rose-250 shadow-3xs shrink-0";
+          dot.className = "h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-rose-500 shrink-0";
           label.innerHTML = "Offline";
         }
       }
@@ -751,7 +765,7 @@ Burger King #27028 Gainesville\t1\t20x20x2\t4
 
       return `
         <div class="flex flex-col gap-4 w-full">
-          <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div class="hidden sm:flex items-center justify-between gap-3 flex-wrap">
             <div>
               <h2 class="text-base sm:text-lg font-black text-slate-900 leading-none">${title}</h2>
               <p class="text-xs text-slate-500 mt-1">${desc}</p>
@@ -778,8 +792,8 @@ Burger King #27028 Gainesville\t1\t20x20x2\t4
               </div>
 
               <!-- Filters selections -->
-              <select id="select-status" onchange="window.setFilter(this.value)" class="border border-slate-250 text-xs font-semibold text-slate-700 bg-slate-100 rounded-xl px-2.5 py-2 cursor-pointer outline-none"></select>
-              <select id="select-category" onchange="window.setCategory(this.value)" class="border border-slate-250 text-xs font-semibold text-slate-700 bg-slate-100 rounded-xl px-2.5 py-2 cursor-pointer outline-none">
+              <select id="select-status" onchange="window.setFilter(this.value)" class="hidden sm:inline-block border border-slate-250 text-xs font-semibold text-slate-700 bg-slate-100 rounded-xl px-2.5 py-2 cursor-pointer outline-none"></select>
+              <select id="select-category" onchange="window.setCategory(this.value)" class="hidden sm:inline-block border border-slate-250 text-xs font-semibold text-slate-700 bg-slate-100 rounded-xl px-2.5 py-2 cursor-pointer outline-none">
                 <option value="all">All Categories</option>
                 <option value="fastfood">🍔 Fast Food</option>
                 <option value="cstore">🏪 C-Store</option>
@@ -787,9 +801,9 @@ Burger King #27028 Gainesville\t1\t20x20x2\t4
               </select>
 
               <!-- Size selector dropdown -->
-              <div class="relative">
+              <div class="hidden sm:block relative font-sans">
                 <button onclick="window.toggleSizeDropdown()" class="border border-slate-250 text-xs font-semibold text-slate-700 bg-slate-100/50 hover:bg-slate-100 rounded-xl px-3 py-2 cursor-pointer outline-none transition-all flex items-center justify-between gap-2.5 min-w-[130px]">
-                  <span id="active-size-label" class="truncate">📏 All Sizes</span>
+                  <span id="active-size-label" class="truncate font-sans">📏 All Sizes</span>
                   <span class="text-[9px] text-slate-400">▼</span>
                 </button>
                 <div id="size-dropdown-menu" class="hidden absolute top-full right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 min-w-[180px] max-h-[220px] overflow-y-auto py-1 animate-fade-in"></div>
@@ -843,43 +857,78 @@ Burger King #27028 Gainesville\t1\t20x20x2\t4
         const pumpTS = lastPumpTS.length > 0 ? Math.max(...lastPumpTS) : null;
         const pumpDays = calculateDaysSinceChange(pumpTS);
 
+        const gasDays = calculateDaysSinceChange(gasTS);
+        const dieselDays = calculateDaysSinceChange(dieselTS);
+
+        let gasState = "pending";
+        let dieselState = "pending";
+
+        if (isCStore) {
+          if (gasChanged === "yes") {
+            gasState = (gasDays !== null && gasDays > 90) ? "overdue" : "done";
+          }
+          if (dieselChanged === "yes") {
+            dieselState = (dieselDays !== null && dieselDays > 90) ? "overdue" : "done";
+          }
+        }
+
         let pumpStatus = "pending";
         if (isCStore) {
-          if (gasChanged === "yes" && dieselChanged === "yes") {
-            pumpStatus = (pumpDays !== null && pumpDays > 90) ? "overdue" : "good";
-          } else if (gasChanged === "yes" || dieselChanged === "yes") {
-            pumpStatus = (pumpDays !== null && pumpDays > 90) ? "overdue" : "pending";
+          if (gasState === "overdue" || dieselState === "overdue") {
+            pumpStatus = "overdue";
+          } else if (gasState === "done" && dieselState === "done") {
+            pumpStatus = "good";
+          } else if (gasState === "pending" && dieselState === "pending") {
+            pumpStatus = "pending";
+          } else {
+            pumpStatus = "incomplete";
           }
         } else {
           pumpStatus = "good";
         }
 
-        let status = "state-none", statusText = "Pending", indicatorText = "Never Changed", pillIcon = "⏱️";
+        let status = "state-none", statusText = "Pending", indicatorText = "Never Changed", pillIcon = "🟡";
         if (state.activeTab === "ac") {
           status = acStatus;
-          if (acStatus === "state-overdue") { statusText = "Overdue"; indicatorText = `${acDays}d overdue`; pillIcon = "⚠️"; }
-          else if (acStatus === "state-good") { statusText = "Good"; indicatorText = `${acDays}d ago`; pillIcon = "✅"; }
+          if (acStatus === "state-overdue") { statusText = "Overdue"; indicatorText = `${acDays}d overdue`; pillIcon = "🔴"; }
+          else if (acStatus === "state-good") { statusText = "Completed"; indicatorText = `${acDays}d ago`; pillIcon = "🟢"; }
+          else { statusText = "Pending"; indicatorText = "Never Changed"; pillIcon = "🟡"; }
         } else if (state.activeTab === "pump") {
           if (!isCStore) {
              status = "state-good"; statusText = "N/A"; indicatorText = "No Pumps"; pillIcon = "➖";
           } else {
-            if (pumpStatus === "overdue") { status = "state-overdue"; statusText = "Overdue"; indicatorText = `${pumpDays}d overdue`; pillIcon = "⚠️"; }
-            else if (pumpStatus === "good") { status = "state-good"; statusText = "Completed"; indicatorText = `${pumpDays}d ago`; pillIcon = "✅"; }
-            else { status = "state-none"; statusText = (gasChanged === "yes" || dieselChanged === "yes") ? "Partial" : "Pending"; indicatorText = pumpDays !== null ? `${pumpDays}d ago` : "Never Changed"; }
+            if (pumpStatus === "overdue") { status = "state-overdue"; statusText = "Overdue"; indicatorText = `${pumpDays}d overdue`; pillIcon = "🔴"; }
+            else if (pumpStatus === "good") { status = "state-good"; statusText = "Completed"; indicatorText = `${pumpDays}d ago`; pillIcon = "🟢"; }
+            else if (pumpStatus === "incomplete") { status = "state-incomplete"; statusText = "Incomplete"; indicatorText = "Partial"; pillIcon = "🟠"; }
+            else { status = "state-none"; statusText = "Pending"; indicatorText = "Never Changed"; pillIcon = "🟡"; }
           }
         } else {
+          // tab is "all"
           const isACOver = acStatus === "state-overdue";
           const isPumpOver = isCStore && pumpStatus === "overdue";
+
           if (isACOver || isPumpOver) {
             status = "state-overdue"; statusText = "Overdue";
             const max = Math.max(acDays || 0, pumpDays || 0);
-            indicatorText = `${max}d overdue`; pillIcon = "⚠️";
-          } else if (acStatus === "state-none" || (isCStore && pumpStatus === "pending")) {
-            status = "state-none"; statusText = "Pending"; indicatorText = "Needs logging";
+            indicatorText = `${max}d overdue`; pillIcon = "🔴";
           } else {
-            status = "state-good"; statusText = "Good";
-            const max = Math.max(acDays || 0, pumpDays || 0);
-            indicatorText = max > 0 ? `${max}d ago` : "Up to Date"; pillIcon = "✅";
+            // No task is overdue
+            const acDone = acStatus === "state-good";
+            const acPending = acStatus === "state-none";
+
+            const pumpDone = !isCStore || pumpStatus === "good";
+            const pumpPending = isCStore && pumpStatus === "pending";
+
+            if (acDone && pumpDone) {
+              status = "state-good"; statusText = "Completed";
+              const max = Math.max(acDays || 0, pumpDays || 0);
+              indicatorText = max > 0 ? `${max}d ago` : "Up to Date"; pillIcon = "🟢";
+            } else if (acPending && pumpPending) {
+              status = "state-none"; statusText = "Pending"; indicatorText = "Needs logging"; pillIcon = "🟡";
+            } else {
+              // Some is done, some is pending
+              status = "state-incomplete"; statusText = "Incomplete"; indicatorText = "Partial"; pillIcon = "🟠";
+            }
           }
         }
 
@@ -917,6 +966,7 @@ Burger King #27028 Gainesville\t1\t20x20x2\t4
       if (state.activeFilter !== "all") {
         filtered = filtered.filter(s => {
           if (state.activeFilter === "overdue") return s.status === "state-overdue";
+          if (state.activeFilter === "incomplete") return s.status === "state-incomplete";
           if (state.activeFilter === "none") return s.status === "state-none";
           if (state.activeFilter === "good") return s.status === "state-good";
           if (state.activeFilter === "missingsizes") return s.sizesList.length === 0;
@@ -935,7 +985,7 @@ Burger King #27028 Gainesville\t1\t20x20x2\t4
 
       // Sorting sequence
       filtered.sort((a, b) => {
-        const getPrio = (s) => s.status === "state-overdue" ? 1 : s.status === "state-none" ? 2 : 3;
+        const getPrio = (s) => s.status === "state-overdue" ? 1 : s.status === "state-incomplete" ? 2 : s.status === "state-none" ? 3 : 4;
         const prioDiff = getPrio(a) - getPrio(b);
         if (prioDiff !== 0) return prioDiff;
         const nA = parseInt(a.storeNumber.replace(/\D/g, "")) || 0;
@@ -947,14 +997,16 @@ Burger King #27028 Gainesville\t1\t20x20x2\t4
       const selectSt = document.getElementById("select-status");
       if (selectSt) {
         const ov = allMapped.filter(s => s.status === "state-overdue").length;
+        const inc = allMapped.filter(s => s.status === "state-incomplete").length;
         const pe = allMapped.filter(s => s.status === "state-none").length;
         const gd = allMapped.filter(s => s.status === "state-good").length;
         const ms = allMapped.filter(s => s.sizesList.length === 0).length;
         selectSt.innerHTML = `
           <option value="all" ${state.activeFilter === "all" ? "selected" : ""}>All Statuses (${filtered.length})</option>
-          <option value="overdue" ${state.activeFilter === "overdue" ? "selected" : ""}>⚠️ Overdue (${ov})</option>
-          <option value="none" ${state.activeFilter === "none" ? "selected" : ""}>⏱️ Pending (${pe})</option>
-          <option value="good" ${state.activeFilter === "good" ? "selected" : ""}>✅ Up to Date (${gd})</option>
+          <option value="overdue" ${state.activeFilter === "overdue" ? "selected" : ""}>🔴 Overdue (${ov})</option>
+          <option value="incomplete" ${state.activeFilter === "incomplete" ? "selected" : ""}>🟠 Incomplete (${inc})</option>
+          <option value="none" ${state.activeFilter === "none" ? "selected" : ""}>🟡 Pending (${pe})</option>
+          <option value="good" ${state.activeFilter === "good" ? "selected" : ""}>🟢 Completed (${gd})</option>
           <option value="missingsizes" ${state.activeFilter === "missingsizes" ? "selected" : ""}>⚠️ Missing Sizes (${ms})</option>
         `;
       }
@@ -1009,18 +1061,22 @@ Burger King #27028 Gainesville\t1\t20x20x2\t4
           grid.innerHTML = `
             <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3.5 w-full">
               ${filtered.map(store => {
-                let statusBadge = "bg-amber-100/90 text-amber-900 border-amber-300 font-bold";
-                let cardStyles = "bg-amber-100 hover:bg-amber-150 border-amber-300 text-amber-955 border-2";
-                let numBadgeClass = "bg-white/70 border-amber-350 text-amber-955";
+                let statusBadge = "bg-amber-100/90 text-amber-900 border-amber-350 font-bold";
+                let cardStyles = "bg-amber-50 hover:bg-amber-100/60 border-amber-250 text-slate-850 border-2";
+                let numBadgeClass = "bg-white/70 border-amber-205 text-slate-700";
 
                 if (store.status === "state-overdue") {
-                  statusBadge = "bg-rose-150 text-rose-900 border-rose-350 font-bold";
-                  cardStyles = "bg-rose-100 hover:bg-rose-150 border-rose-350 text-rose-955 border-2 animate-pulse-slow";
-                  numBadgeClass = "bg-white/70 border-rose-350 text-rose-935";
+                  statusBadge = "bg-rose-100 text-rose-800 border-rose-300 font-bold";
+                  cardStyles = "bg-rose-50 hover:bg-rose-100/60 border-rose-250 text-slate-850 border-2 animate-pulse-slow";
+                  numBadgeClass = "bg-white/70 border-rose-205 text-slate-700";
                 } else if (store.status === "state-good") {
-                  statusBadge = "bg-emerald-150 text-emerald-950 border-emerald-300 font-bold";
-                  cardStyles = "bg-emerald-100 hover:bg-emerald-150 border-emerald-350 text-emerald-955 border-2";
-                  numBadgeClass = "bg-white/70 border-emerald-350 text-emerald-935";
+                  statusBadge = "bg-emerald-100 text-emerald-800 border-emerald-300 font-bold";
+                  cardStyles = "bg-emerald-50 hover:bg-emerald-100/60 border-emerald-250 text-slate-850 border-2";
+                  numBadgeClass = "bg-white/70 border-emerald-205 text-slate-700";
+                } else if (store.status === "state-incomplete") {
+                  statusBadge = "bg-orange-100 text-orange-900 border-orange-355 font-bold";
+                  cardStyles = "bg-orange-50 hover:bg-orange-100/60 border-orange-250 text-slate-850 border-2";
+                  numBadgeClass = "bg-white/70 border-orange-205 text-slate-700";
                 }
 
                 const cat = getStoreCategory(store.storeName);
@@ -1032,7 +1088,7 @@ Burger King #27028 Gainesville\t1\t20x20x2\t4
                 const sizeEntries = Object.entries(sizesGroup);
 
                 const sizesPreview = missSizes
-                  ? `<div class="text-[9px] font-bold text-red-700 bg-red-50 border border-red-150 rounded px-1.5 py-0.5 flex items-center gap-1 mt-1.5 w-fit">
+                   ? `<div class="text-[9px] font-bold text-red-700 bg-red-50 border border-red-150 rounded px-1.5 py-0.5 flex items-center gap-1 mt-1.5 w-fit">
                       ${iconAlertTriangle}<span>Missing Sizes</span>
                     </div>`
                   : `<div class="mt-2.5 flex flex-wrap gap-1 items-center max-h-[44px] overflow-hidden">
@@ -1056,8 +1112,8 @@ Burger King #27028 Gainesville\t1\t20x20x2\t4
                       ${store.isCStore ? `
                         <div class="flex items-center justify-between border-t border-black/5 pt-1.5">
                           <span class="font-bold text-slate-705">Pump Filters:</span>
-                          <span class="px-1.5 py-0.5 rounded-md font-black text-[9px] ${store.pumpStatus === "overdue" ? "text-rose-700 bg-rose-50 border border-rose-150" : store.pumpStatus === "good" ? "text-emerald-700 bg-emerald-50 border border-emerald-150" : "text-amber-700 bg-amber-50 border border-amber-150"}">
-                            ${store.pumpStatus === "overdue" ? "⚠️ Overdue" : store.pumpStatus === "good" ? "✅ Complete" : "⏱️ Pending"}
+                          <span class="px-1.5 py-0.5 rounded-md font-black text-[9px] ${store.pumpStatus === "overdue" ? "text-rose-700 bg-rose-50 border border-rose-150" : store.pumpStatus === "good" ? "text-emerald-700 bg-emerald-50 border border-emerald-150" : store.pumpStatus === "incomplete" ? "text-orange-700 bg-orange-50 border border-orange-150" : "text-amber-700 bg-amber-50 border border-amber-150"}">
+                            ${store.pumpStatus === "overdue" ? "⚠️ Overdue" : store.pumpStatus === "good" ? "✅ Complete" : store.pumpStatus === "incomplete" ? "🟠 Partial" : "⏱️ Pending"}
                           </span>
                         </div>
                       ` : ""}
@@ -1085,14 +1141,14 @@ Burger King #27028 Gainesville\t1\t20x20x2\t4
                           ${store.isCStore ? `
                             <div class="flex justify-between border-t border-black/5 pt-0.5">
                               <span>Pump:</span>
-                              <span class="${store.pumpStatus === "overdue" ? "text-rose-700" : store.pumpStatus === "good" ? "text-emerald-700" : "text-amber-700"}">${store.pumpStatus === "overdue" ? "OVERDUE" : store.pumpStatus === "good" ? "OK" : "PENDING"}</span>
+                              <span class="${store.pumpStatus === "overdue" ? "text-rose-700" : store.pumpStatus === "good" ? "text-emerald-700" : store.pumpStatus === "incomplete" ? "text-orange-600" : "text-amber-700"}">${store.pumpStatus === "overdue" ? "OVERDUE" : store.pumpStatus === "good" ? "OK" : store.pumpStatus === "incomplete" ? "PARTIAL" : "PENDING"}</span>
                             </div>
                           ` : ""}
                         </div>
                       ` : `
                         <div class="border-t border-black/5 pt-1 mt-2 text-[8px] text-slate-600 flex justify-between font-bold">
                           <span>Activity</span>
-                          <span class="${store.status === "state-overdue" ? "text-rose-750" : store.status === "state-good" ? "text-emerald-750" : "text-amber-700"}">${store.indicatorText}</span>
+                          <span class="${store.status === "state-overdue" ? "text-rose-750" : store.status === "state-good" ? "text-emerald-755" : store.status === "state-incomplete" ? "text-orange-755" : "text-amber-700"}">${store.indicatorText}</span>
                         </div>
                       `}
                     </div>
