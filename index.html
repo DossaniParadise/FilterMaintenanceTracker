@@ -150,18 +150,61 @@
     let online = false;
     let loading = true;
 
+  <script>
+    const API_BASE_URL = "https://alignment-api-khaki.vercel.app/api/dpm-alignment";
+    const EDIT_PASSWORD = "filter123";
+
+    // Dynamic state managers
+    const state = {
+      activeTab: "all",
+      searchQuery: "",
+      activeFilter: "all",
+      activeDepartment: "all",
+      activeRegion: "all",
+      activeSize: "all",
+      showSizeDropdown: false,
+      selectedStoreId: null,
+      showBulkImport: false,
+
+      // Modal active parameters representing technician entries
+      modalDateStr: "",
+      modalAcChanged: "",
+      modalCoilsCleaned: "",
+      modalCoilsCleanedDate: "",
+      modalComments: "",
+      modalShowAddSizes: false,
+      modalAddSizeRows: [],
+      modalShowUnitDetails: false,
+      modalShowSizesSection: false,
+      modalGasChanged: "",
+      modalDieselChanged: "",
+      modalGasDateStr: "",
+      modalDieselDateStr: "",
+      modalSaving: false,
+
+      // Bulk Importer variables
+      bulkTextInput: "",
+      parsedMatches: [],
+      isAnalyzed: false,
+      isBulkSaving: false
+    };
+
+    let restaurants = {};
+    let acRecords = {};
+    let pumpRecords = {};
+    let online = false;
+    let loading = true;
+
     // ==========================================
     // VIRTUAL FIREBASE ROUTER (v10 Modular Mock)
     // Intercepts app save requests and routes them to Vercel
     // ==========================================
-    const db = {}; // Dummy object to satisfy legacy code
+    const db = {}; 
 
-    // Mocks the Firebase ref() function to just return the path string
     function ref(database, path) {
       return path;
     }
 
-    // Mocks the Firebase update() function to send a secure POST to Vercel
     async function update(path, payload) {
       const updates = {};
       updates[path] = payload;
@@ -180,7 +223,6 @@
       await loadDashboardData(); // Refresh UI instantly
     }
 
-    // Fetch live data from Vercel on load and after saves
     async function loadDashboardData() {
       try {
         const response = await fetch(API_BASE_URL);
@@ -195,16 +237,13 @@
         online = true;
         loading = false;
         render();
-        updateHeader();
       } catch (error) {
-        console.error("Failed to fetch data from Vercel:", error);
+        console.error("Failed to fetch data:", error);
         online = false;
         loading = false;
         render();
-        updateHeader();
       }
     }
-
 
     // Utility formulas
     function getFirebaseSafePathKey(num) {
