@@ -86,6 +86,7 @@
   </footer>
 
   <div id="modal-container"></div>
+  <div id="inventory-panels-container"></div>
 
   <script>
     const iconWrench = `<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
@@ -138,7 +139,19 @@
       bulkTextInput: "",
       parsedMatches: [],
       isAnalyzed: false,
-      isBulkSaving: false
+      isBulkSaving: false,
+
+      // Inventory Management State
+      showInventoryModal: false,
+      showInventoryHistoryModal: false,
+      selectedHistorySize: "",
+      invDateStr: "",
+      invSize: "",
+      invQtyReceived: "",
+      invTotalCost: "",
+      invQtyDispatched: "",
+      invDispatchStoreId: "",
+      invSaving: false
     };
 
     let restaurants = {};
@@ -315,6 +328,123 @@
     window.openBulkImport = () => { state.showBulkImport = true; render(); };
     window.closeBulkImport = () => { state.showBulkImport = false; render(); };
 
+    // Inventory Actions
+    window.openInventoryModal = () => { 
+      state.showInventoryModal = true; 
+      state.invDateStr = getChicagoTodayDateString(); 
+      state.invSize = "";
+      state.invQtyReceived = "";
+      state.invTotalCost = "";
+      state.invQtyDispatched = "";
+      state.invDispatchStoreId = "";
+      render(); 
+    };
+    window.closeInventoryModal = () => { state.showInventoryModal = false; render(); };
+    window.openHistoryModal = (sz) => { state.selectedHistorySize = sz; state.showInventoryHistoryModal = true; render(); };
+    window.closeHistoryModal = () => { state.showInventoryHistoryModal = false; render(); };
+    window.updateInvField = (field, val) => { state[field] = val; render(); };
+    
+    window.saveInventoryTransaction = async () => {
+      const date = state.invDateStr;
+      const size = state.invSize;
+      const rec = parseInt(state.invQtyReceived, 10) || 0;
+      const cost = parseFloat(state.invTotalCost) || 0;
+      const disp = parseInt(state.invQtyDispatched, 10) || 0;
+      const storeNum = state.invDispatchStoreId;
+
+      if (!date) {
+        alert("Please select a transaction date.");
+        return;
+      }
+      if (!size) {
+        alert("Please select a filter size.");
+        return;
+      }
+      if (rec < 0 || disp < 0) {
+        alert("Quantities cannot be negative.");
+        return;
+      }
+      if (rec === 0 && disp === 0) {
+        alert("Please enter either a received quantity or a dispatched quantity.");
+        return;
+      }
+      if (disp > 0 && !storeNum) {
+        alert("Please select a destination store for the dispatched filters.");
+        return;
+      }
+
+      let destStoreName = "";
+      if (disp > 0 && storeNum) {
+        const matched = Object.values(restaurants).find(s => String(s.storeNumber) === String(storeNum));
+        destStoreName = matched ? matched.storeName : `Store #${storeNum}`;
+      }
+
+      const officeRecord = acRecords["76051"] || {};
+      let masterMap = {};
+      try {
+        if (officeRecord.inventoryMasterState) {
+          masterMap = JSON.parse(officeRecord.inventoryMasterState);
+        }
+      } catch(e){}
+
+      let historyList = [];
+      try {
+        if (officeRecord.inventoryHistoryState) {
+          historyList = JSON.parse(officeRecord.inventoryHistoryState);
+        }
+      } catch(e){}
+
+      const currentTally = masterMap[size] || 0;
+      const newTally = currentTally + rec - disp;
+      if (newTally < 0) {
+        if (!confirm(`Warning: This transaction will result in negative stock count (${newTally}) for size ${size}. Do you wish to proceed?`)) {
+          return;
+        }
+      }
+
+      const newTx = {
+        id: "tx_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+        date: date,
+        size: size,
+        qtyReceived: rec,
+        totalCost: cost,
+        unitPrice: rec > 0 ? (cost / rec).toFixed(2) : "0.00",
+        qtyDispatched: disp,
+        storeNumber: storeNum || "",
+        storeName: destStoreName || "",
+        timestamp: Date.now()
+      };
+
+      masterMap[size] = newTally;
+      historyList.unshift(newTx);
+
+      state.invSaving = true;
+      render();
+
+      try {
+        await update("filterChanges/76051", {
+          storeNumber: "76051",
+          inventoryMasterState: JSON.stringify(masterMap),
+          inventoryHistoryState: JSON.stringify(historyList)
+        });
+        
+        state.invSize = "";
+        state.invQtyReceived = "";
+        state.invTotalCost = "";
+        state.invQtyDispatched = "";
+        state.invDispatchStoreId = "";
+        state.showInventoryModal = false;
+        state.invSaving = false;
+        
+        alert("Transaction successfully committed to stock!");
+        render();
+      } catch (err) {
+        state.invSaving = false;
+        render();
+        alert("Transaction save failed: " + err.message);
+      }
+    };
+
     window.openStore = (id) => {
       state.selectedStoreId = id;
       const store = restaurants[id];
@@ -460,6 +590,7 @@
         });
         alert("Filter size configuration updated successfully!");
         state.modalShowAddSizes = false;
+        render();
       } catch (err) {
         alert("Could not update configuration: " + err.message);
       }
@@ -472,6 +603,7 @@
         try {
           await update(`filterChanges/${safeKey}`, { filterSize: null, filterSizesList: null });
           alert("Configurations cleared successfully!");
+          render();
         } catch(e) {
           alert("Reset failed: " + e.message);
         }
@@ -491,6 +623,7 @@
           });
           state.modalSaving = false;
           state.selectedStoreId = null;
+          render();
         } catch(e) {
           state.modalSaving = false;
           render();
@@ -560,6 +693,7 @@
 
         state.modalSaving = false;
         state.selectedStoreId = null;
+        render();
       } catch (err) {
         state.modalSaving = false;
         render();
@@ -762,13 +896,24 @@
       if (state.showBulkImport) {
         container.innerHTML = renderBulkImporter();
         modal.innerHTML = "";
+        const panelsDiv = document.getElementById("inventory-panels-container");
+        if (panelsDiv) panelsDiv.innerHTML = "";
         return;
       }
 
       container.innerHTML = renderACFiltersApp();
       filterAndRenderCardsAndStats();
 
-      if (state.selectedStoreId) {
+      const panelsDiv = document.getElementById("inventory-panels-container");
+      if (panelsDiv) {
+        panelsDiv.innerHTML = renderInventoryLeftPanel() + renderInventoryRightPanel();
+      }
+
+      if (state.showInventoryModal) {
+        modal.innerHTML = renderInventoryModal();
+      } else if (state.showInventoryHistoryModal) {
+        modal.innerHTML = renderInventoryHistoryModal();
+      } else if (state.selectedStoreId) {
         modal.innerHTML = renderStoreDetailsModal();
       } else {
         modal.innerHTML = "";
@@ -786,10 +931,15 @@
               <h2 class="text-base sm:text-lg font-black text-slate-900 leading-none">${title}</h2>
               <p class="text-xs text-slate-500 mt-1">${desc}</p>
             </div>
-            <button onclick="window.openBulkImport()" class="bg-slate-900 border border-slate-900 text-white hover:bg-slate-800 text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5 shrink-0">
-              ${iconClipboardList}
-              <span>Bulk Import Sizes</span>
-            </button>
+            <div class="flex items-center gap-2">
+              <button onclick="window.openInventoryModal()" class="bg-indigo-600 border border-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5 shrink-0 [a8]">
+                <span>Update Inventory <span class="text-[8px] font-mono opacity-80 select-none">[a8]</span></span>
+              </button>
+              <button onclick="window.openBulkImport()" class="bg-slate-900 border border-slate-900 text-white hover:bg-slate-800 text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5 shrink-0">
+                ${iconClipboardList}
+                <span>Bulk Import Sizes</span>
+              </button>
+            </div>
           </div>
 
           <div class="grid grid-cols-3 gap-1.5 sm:gap-2.5 w-full text-sans">
@@ -1381,7 +1531,7 @@
                     ${store.address}
                   </div>
                   <div class="flex gap-2">
-                    <a href="https://maps.google.com/?q=$${encodeURIComponent(store.address)}" target="_blank" rel="noreferrer" class="flex-1 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-850 text-white font-bold py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 shadow-3xs transition-all text-xs text-center cursor-pointer select-none">
+                    <a href="https://maps.google.com/?q=${encodeURIComponent(store.address)}" target="_blank" rel="noreferrer" class="flex-1 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-850 text-white font-bold py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 shadow-3xs transition-all text-xs text-center cursor-pointer select-none">
                       ${iconMapPin}
                       GPS Map
                     </a>
@@ -1621,6 +1771,329 @@
                   Save
                 </button>
               </div>
+            </div>
+
+          </div>
+        </div>
+      `;
+    }
+
+    // ==========================================
+    // INVENTORY MANAGEMENT RENDERERS & HELPERS
+    // ==========================================
+    function renderInventoryLeftPanel() {
+      return "";
+    }
+
+    function renderInventoryRightPanel() {
+      return "";
+    }
+
+    function renderInventoryModal() {
+      const officeRecord = acRecords["76051"] || {};
+      let masterMap = {};
+      try {
+        if (officeRecord.inventoryMasterState) {
+          masterMap = JSON.parse(officeRecord.inventoryMasterState);
+        }
+      } catch(e){}
+
+      const uniqueSizesSet = new Set();
+      Object.values(acRecords).forEach(rec => {
+        let sizesList = [];
+        try {
+          if (rec.filterSizesList) sizesList = JSON.parse(rec.filterSizesList);
+        } catch(e){}
+        if (sizesList.length === 0 && rec.filterSize) {
+          sizesList = rec.filterSize.split(/,\s*/).map((p, idx) => {
+            const match = p.trim().match(/^\((\d+)\)\s*(.*)$/);
+            return {
+              unit: String(idx + 1),
+              size: match ? match[2].trim().toUpperCase() : p.trim().toUpperCase(),
+              qty: match ? match[1].trim() : "4"
+            };
+          });
+        }
+        sizesList.forEach(item => {
+          if (item.size) uniqueSizesSet.add(item.size.trim().toUpperCase());
+        });
+      });
+      Object.keys(masterMap).forEach(sz => {
+        uniqueSizesSet.add(sz.trim().toUpperCase());
+      });
+      const sizesList = Array.from(uniqueSizesSet).sort();
+
+      const currentSize = state.invSize;
+      const currentTally = currentSize ? (masterMap[currentSize] || 0) : 0;
+      
+      const rec = parseFloat(state.invQtyReceived) || 0;
+      const cost = parseFloat(state.invTotalCost) || 0;
+      const disp = parseFloat(state.invQtyDispatched) || 0;
+      
+      const unitPrice = rec > 0 ? (cost / rec).toFixed(2) : "0.00";
+      const leftoverQty = currentTally + rec - disp;
+
+      const storesList = Object.values(restaurants).sort((a,b) => {
+        const nA = parseInt(a.storeNumber.replace(/\D/g, "")) || 0;
+        const nB = parseInt(b.storeNumber.replace(/\D/g, "")) || 0;
+        return nA - nB;
+      });
+
+      return `
+        <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-3xs flex items-center justify-center p-4 z-50 [a9]">
+          <div class="bg-white rounded-2xl w-full max-w-4xl shadow-xl border border-slate-200 overflow-hidden flex flex-col max-h-[96vh] animate-fade-in relative font-sans">
+            <div class="absolute top-2 right-2 text-[8px] font-bold text-slate-350 pointer-events-none">[a9]</div>
+
+            <div class="bg-slate-50 border-b border-slate-200 px-5 py-3.5 flex items-center justify-between gap-4">
+              <h3 class="text-xs font-black uppercase text-slate-750 tracking-wider flex items-center gap-1.5 [a10]">
+                📦 Filter Inventory & Stock Management Control <span class="text-[8px] bg-indigo-100 text-indigo-750 font-mono px-1.5 py-0.5 rounded select-none font-bold">[a10]</span>
+              </h3>
+              <button onclick="window.closeInventoryModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-full transition-all hover:bg-slate-100 cursor-pointer">
+                ${iconX}
+              </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-12 gap-6 max-h-[calc(96vh-120px)]">
+              
+              <div class="md:col-span-5 flex flex-col border-r border-slate-100 pr-0 md:pr-6 gap-3">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2 mb-1 shrink-0">
+                  <h4 class="text-xs font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5 [a2]">
+                    📦 At-A-Glance Stock levels <span class="text-[8px] text-indigo-505 font-mono shrink-0 select-none">[a2]</span>
+                  </h4>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto max-h-[460px] pr-1.5 flex flex-col gap-2 [a1]">
+                  <span class="text-[7px] text-slate-350 select-none hidden">[a1]</span>
+                  ${sizesList.length === 0 ? `
+                    <div class="text-xs italic text-slate-400 py-6 text-center">No sizes in database.</div>
+                  ` : sizesList.map(sz => {
+                    const leftover = masterMap[sz] !== undefined ? masterMap[sz] : 0;
+                    let stockBg = "bg-slate-105 text-slate-805 border-slate-205";
+                    if (leftover <= 0) {
+                      stockBg = "bg-rose-50 text-rose-750 border-rose-205";
+                    } else if (leftover < 15) {
+                      stockBg = "bg-amber-50 text-amber-755 border-amber-205";
+                    } else {
+                      stockBg = "bg-emerald-50 text-emerald-755 border-emerald-205";
+                    }
+
+                    const isCurrentFormSize = String(sz).trim().toUpperCase() === String(currentSize).trim().toUpperCase();
+
+                    return `
+                      <div class="flex items-center justify-between border p-2.5 rounded-xl transition-all relative [a3] ${isCurrentFormSize ? 'bg-indigo-50/50 border-indigo-200 ring-2 ring-indigo-500/10' : 'bg-slate-50/50 hover:bg-slate-50 border-slate-150'}">
+                        <span class="absolute top-1 right-2 text-[7px] text-slate-350 select-none">[a3]</span>
+                        <div class="flex flex-col gap-1 w-full mr-2">
+                          <button onclick="window.updateInvField('invSize', '${sz}')" class="text-left scale-90 origin-left cursor-pointer hover:opacity-80 block focus:outline-none [a4]" title="Click to select this size">
+                            ${renderDimensionBadges(sz)} <span class="text-[7px] text-slate-350 font-bold select-none">[a4]</span>
+                          </button>
+                          <div class="flex items-center gap-1 mt-0.5">
+                            <span class="text-[9px] font-bold text-slate-400">Stock:</span>
+                            <span class="text-[10px] font-mono font-black px-1.5 py-0.5 rounded border leading-none ${stockBg} [a5]">
+                              ${leftover} pcs <span class="text-[7px] font-normal select-none">[a5]</span>
+                            </span>
+                          </div>
+                        </div>
+                        <button onclick="window.openHistoryModal('${sz}')" class="text-[10px] font-extrabold text-blue-600 bg-blue-50 hover:bg-blue-105 border border-blue-200 hover:border-blue-300 px-2 py-1 rounded-lg transition-all shrink-0 cursor-pointer [a6]">
+                          History <span class="text-[7px] select-none text-blue-400 font-bold">[a6]</span>
+                        </button>
+                      </div>
+                    `;
+                  }).join("")}
+                </div>
+              </div>
+
+              <div class="md:col-span-7 flex flex-col gap-4">
+                
+                <h4 class="text-xs font-black uppercase text-indigo-700 tracking-wider pb-2 border-b border-indigo-50/50">
+                  📝 Record / Log Transaction
+                </h4>
+
+                <div class="flex flex-col gap-1.5">
+                <label class="text-[11px] uppercase font-bold text-slate-500 tracking-wider flex items-center gap-1 [a11]">
+                  📅 Date of Entry <span class="text-[8px] text-blue-500 font-bold ml-1">[a11]</span>
+                </label>
+                <input type="date" value="${state.invDateStr}" onchange="window.updateInvField('invDateStr', this.value)" class="w-full text-xs border border-slate-250 rounded-xl px-3 py-2.5 outline-none focus:border-slate-400 font-sans" />
+              </div>
+
+              <div class="flex flex-col gap-1.5">
+                <label class="text-[11px] uppercase font-bold text-slate-500 tracking-wider flex items-center gap-1 [a12]">
+                  📏 Filter Size <span class="text-[8px] text-blue-500 font-bold ml-1">[a12]</span>
+                </label>
+                <select onchange="window.updateInvField('invSize', this.value)" class="w-full text-xs border border-slate-250 rounded-xl px-3 py-2.5 outline-none focus:border-slate-400 font-sans bg-white">
+                  <option value="">-- Choose Filter Size --</option>
+                  ${sizesList.map(sz => `
+                    <option value="${sz}" ${sz === currentSize ? "selected" : ""}>${sz} (Current Stock: ${masterMap[sz] !== undefined ? masterMap[sz] : 0} pcs)</option>
+                  `).join("")}
+                </select>
+              </div>
+
+              <div class="border-t border-slate-100 my-1"></div>
+
+              <div class="bg-blue-50/50 p-3 rounded-xl border border-blue-100 flex flex-col gap-3">
+                <div class="text-[10px] font-extrabold uppercase text-blue-600 tracking-wider">➕ INCOMING STOCK</div>
+                
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1 [a13]">
+                      Qty Received <span class="text-[8px] text-blue-500 font-bold ml-1">[a13]</span>
+                    </label>
+                    <input type="number" min="0" placeholder="0" value="${state.invQtyReceived}" oninput="window.updateInvField('invQtyReceived', this.value)" class="w-full text-xs border border-slate-250 rounded-xl p-2.5 outline-none focus:border-slate-400 font-mono" />
+                  </div>
+
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1 [a14]">
+                      Total Cost ($) <span class="text-[8px] text-blue-500 font-bold ml-1">[a14]</span>
+                    </label>
+                    <input type="number" min="0" step="0.01" placeholder="0.00" value="${state.invTotalCost}" oninput="window.updateInvField('invTotalCost', this.value)" class="w-full text-xs border border-slate-250 rounded-xl p-2.5 outline-none focus:border-slate-400 font-mono" />
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between text-xs bg-white/70 border border-slate-200 px-3 py-2 rounded-lg [a15]">
+                  <span class="text-slate-500 font-medium font-sans">Auto Unit Price Check:</span>
+                  <span class="font-mono font-bold text-slate-800">$${unitPrice} per filter <span class="text-[8px] text-slate-450 font-normal">[a15]</span></span>
+                </div>
+              </div>
+
+              <div class="bg-amber-50/30 p-3 rounded-xl border border-amber-100/70 flex flex-col gap-3">
+                <div class="text-[10px] font-extrabold uppercase text-amber-700 tracking-wider">➖ DISPATCH TO STORE</div>
+
+                <div class="grid grid-cols-12 gap-3 items-end">
+                  <div class="col-span-4 flex flex-col gap-1.5 flex-wrap">
+                    <label class="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1 [a16]">
+                      Qty Dispatched <span class="text-[8px] text-blue-500 font-bold ml-1">[a16]</span>
+                    </label>
+                    <input type="number" min="0" placeholder="0" value="${state.invQtyDispatched}" oninput="window.updateInvField('invQtyDispatched', this.value)" class="w-full text-xs border border-slate-250 rounded-xl p-2.5 outline-none focus:border-slate-400 font-mono" />
+                  </div>
+
+                  <div class="col-span-8 flex flex-col gap-1.5 select-none">
+                    <label class="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1 [a17]">
+                      To Store Destination <span class="text-[8px] text-blue-500 font-bold ml-1">[a17]</span>
+                    </label>
+                    <select onchange="window.updateInvField('invDispatchStoreId', this.value)" class="w-full text-xs border border-slate-250 rounded-xl p-2.5 outline-none focus:border-slate-400 font-sans bg-white">
+                      <option value="">-- Choose Store --</option>
+                      ${storesList.map(s => `
+                        <option value="${s.storeNumber}" ${String(s.storeNumber) === String(state.invDispatchStoreId) ? "selected" : ""}>#${s.storeNumber} - ${formatStoreNameDisplay(s.storeName)}</option>
+                      `).join("")}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-slate-900 border border-slate-800 text-white p-3.5 rounded-xl flex items-center justify-between shadow-3xs [a18]">
+                <div class="flex flex-col">
+                  <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Projected Leftover</span>
+                  <span class="text-[10px] text-blue-300 font-bold leading-none mt-1 font-sans">size: ${currentSize || "(unselected)"}</span>
+                </div>
+                <div class="flex items-baseline gap-1">
+                  <span class="text-lg font-mono font-black ${leftoverQty < 0 ? "text-rose-400 animate-pulse" : "text-emerald-400"}">${leftoverQty}</span>
+                  <span class="text-xs font-extrabold text-slate-400 font-mono">pcs</span>
+                  <span class="text-[8px] text-slate-400 font-bold self-start ml-1 select-none">[a18]</span>
+                </div>
+              </div>
+
+              </div> </div> <div class="bg-slate-50 border-t border-slate-200 px-5 py-3.5 flex items-center justify-end gap-3 shrink-0">
+              <button onclick="window.closeInventoryModal()" class="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-100 rounded-lg transition-all cursor-pointer [a20]">
+                Cancel <span class="text-[8px] font-normal text-slate-400 select-none">[a20]</span>
+              </button>
+              <button onclick="window.saveInventoryTransaction()" ${state.invSaving ? "disabled" : ""} class="px-5 py-2 text-xs font-bold text-white bg-slate-905 hover:bg-slate-800 disabled:opacity-50 rounded-lg transition-all shadow-xs flex items-center gap-1.5 cursor-pointer [a19]">
+                ${state.invSaving ? `<span class="inline-block h-3 w-3 border-2 border-white/55 border-t-white rounded-full animate-spin"></span>` : iconCheck}
+                Commit Transaction <span class="text-[8px] font-mono select-none text-white/50">[a19]</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      `;
+    }
+
+    function renderInventoryHistoryModal() {
+      const sz = state.selectedHistorySize;
+      const officeRecord = acRecords["76051"] || {};
+      let historyList = [];
+      try {
+        if (officeRecord.inventoryHistoryState) {
+          historyList = JSON.parse(officeRecord.inventoryHistoryState);
+        }
+      } catch(e){}
+
+      const filteredHistory = historyList.filter(tx => String(tx.size).trim().toUpperCase() === String(sz).trim().toUpperCase());
+
+      return `
+        <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-3xs flex items-center justify-center p-4 z-50 [a21]">
+          <div class="bg-white rounded-2xl w-full max-w-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh] animate-fade-in relative font-sans">
+            <div class="absolute top-2 right-2 text-[8px] font-bold text-slate-350 pointer-events-none">[a21]</div>
+
+            <div class="bg-slate-50 border-b border-slate-200 px-5 py-3.5 flex items-center justify-between gap-4">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="text-xs font-black uppercase text-slate-705 tracking-wider flex items-center gap-1 [a22]">
+                  📜 Transaction Ledger <span class="bg-emerald-50 text-emerald-800 border border-emerald-250 text-[9px] font-mono px-1.5 py-0.5 rounded ml-1 font-bold">[a22]</span>
+                </h3>
+                <span class="text-slate-300">/</span>
+                <div class="scale-95 origin-left">${renderDimensionBadges(sz)}</div>
+              </div>
+              <button onclick="window.closeHistoryModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-full transition-all hover:bg-slate-100 cursor-pointer">
+                ${iconX}
+              </button>
+            </div>
+
+            <div class="p-5 overflow-y-auto flex-1">
+              ${filteredHistory.length === 0 ? `
+                <div class="bg-slate-50 border border-dashed rounded-xl p-10 text-center text-xs text-slate-400 [a24]">
+                  No transactions recorded for this size. Use the "Update Inventory" button to log stock receipt or dispatch events. <span class="text-[8px] font-bold select-none">[a24]</span>
+                </div>
+              ` : `
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left text-xs border-collapse [a23]">
+                    <thead>
+                      <tr class="bg-slate-50 text-slate-500 text-[10px] uppercase font-bold tracking-wider border-b border-slate-200">
+                        <th class="p-3">Date</th>
+                        <th class="p-3 text-center">Type</th>
+                        <th class="p-3 text-right">Received</th>
+                        <th class="p-3 text-right">Dispatched</th>
+                        <th class="p-3">Cost details</th>
+                        <th class="p-3">Destination Store</th>
+                        <th class="p-3 text-slate-300 text-[8px]">[a23]</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${filteredHistory.map(tx => {
+                        const isRec = tx.qtyReceived > 0;
+                        const typeLabel = isRec 
+                          ? `<span class="bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded font-black text-[9px] uppercase tracking-wider">RECEIVED</span>`
+                          : `<span class="bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded font-black text-[9px] uppercase tracking-wider">DISPATCH</span>`;
+
+                        return `
+                          <tr class="border-b border-slate-100 font-sans hover:bg-slate-50/50">
+                            <td class="p-3 font-mono font-bold text-slate-700">${tx.date}</td>
+                            <td class="p-3 text-center">${typeLabel}</td>
+                            <td class="p-3 text-right font-mono font-extrabold text-slate-800">${tx.qtyReceived || "-"}</td>
+                            <td class="p-3 text-right font-mono font-extrabold text-orange-650">${tx.qtyDispatched || "-"}</td>
+                            <td class="p-3">
+                              ${isRec ? `
+                                <div class="font-bold text-slate-700">$${parseFloat(tx.totalCost).toFixed(2)}</div>
+                                <div class="text-[9px] text-slate-400">Unit: $${tx.unitPrice}</div>
+                              ` : `<span class="text-slate-400">-</span>`}
+                            </td>
+                            <td class="p-3 max-w-[150px] truncate" title="${tx.storeName || ""}">
+                              ${tx.storeNumber ? `
+                                <div class="font-bold text-slate-800">#${tx.storeNumber}</div>
+                                <div class="text-[10px] text-slate-450 truncate">${formatStoreNameDisplay(tx.storeName)}</div>
+                              ` : `<span class="text-slate-400">-</span>`}
+                            </td>
+                            <td></td>
+                          </tr>
+                        `;
+                      }).join("")}
+                    </tbody>
+                  </table>
+                </div>
+              `}
+            </div>
+
+            <div class="bg-slate-50 border-t border-slate-200 px-5 py-3.5 flex items-center justify-end shrink-0">
+              <button onclick="window.closeHistoryModal()" class="px-4 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-655 hover:bg-slate-100 cursor-default transition-all [a25]">
+                Close Ledger <span class="text-[8px] font-normal text-slate-400 select-none">[a25]</span>
+              </button>
             </div>
 
           </div>
