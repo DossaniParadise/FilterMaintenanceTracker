@@ -925,9 +925,9 @@
                 
                 <div class="flex-1 overflow-y-auto max-h-[460px] pr-1.5 flex flex-col gap-2 [a1]">
                   <span class="text-[7px] text-slate-350 select-none hidden">[a1]</span>
-                  ${sizesList.length === 0 ? `
-                    <div class="text-xs italic text-slate-400 py-6 text-center">No sizes in database.</div>
-                  ` : sizesList.map(sz => {
+                  ${sizesList.filter(sz => (masterMap[sz] !== undefined ? masterMap[sz] : 0) > 0).length === 0 ? `
+                    <div class="text-xs italic text-slate-400 py-6 text-center">No sizes with positive stock.</div>
+                  ` : sizesList.filter(sz => (masterMap[sz] !== undefined ? masterMap[sz] : 0) > 0).map(sz => {
                     const leftover = masterMap[sz] !== undefined ? masterMap[sz] : 0;
                     let stockBg = "bg-slate-105 text-slate-805 border-slate-205";
                     if (leftover <= 0) stockBg = "bg-rose-50 text-rose-750 border-rose-250";
