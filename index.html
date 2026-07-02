@@ -10,6 +10,8 @@
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <link rel="manifest" href="site.webmanifest" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
     body { font-family: 'Inter', sans-serif; }
@@ -55,6 +57,7 @@
           <button onclick="window.setActiveTab('all')" id="tab-all" class="px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all">View all</button>
           <button onclick="window.setActiveTab('ac')" id="tab-ac" class="px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all">AC Filters</button>
           <button onclick="window.setActiveTab('pump')" id="tab-pump" class="px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all">Pump Filters</button>
+          <button onclick="window.setActiveTab('map')" id="tab-map" class="px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all">Map</button>
         </div>
 
         <div id="connection-badge" class="inline-flex items-center gap-1 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold border transition-all shrink-0">
@@ -386,7 +389,8 @@
       const store = restaurants[state.selectedStoreId];
       const safeKey = getFirebaseSafePathKey(store.storeNumber);
       try {
-        await update(`filterChanges/${safeKey}`, { storeNumber: store.storeNumber, filterSize: summary, filterSizesList: JSON.stringify(list) });
+        const existingAc = acRecords[safeKey] || {};
+        await update(`filterChanges/${safeKey}`, { ...existingAc, storeNumber: store.storeNumber, filterSize: summary, filterSizesList: JSON.stringify(list) });
         alert("Filter size configuration updated successfully!");
         state.modalShowAddSizes = false; render();
       } catch (err) { alert("Could not update configuration: " + err.message); }
@@ -395,7 +399,7 @@
     window.clearModalSizes = async () => {
       if (!confirm("Clear custom filter size configurations for this store?")) return;
       const store = restaurants[state.selectedStoreId], safeKey = getFirebaseSafePathKey(store.storeNumber);
-      try { await update(`filterChanges/${safeKey}`, { filterSize: null, filterSizesList: null }); alert("Configurations cleared successfully!"); render(); } catch(e) { alert("Reset failed: " + e.message); }
+      try { const existingAc = acRecords[safeKey] || {}; await update(`filterChanges/${safeKey}`, { ...existingAc, filterSize: null, filterSizesList: null }); alert("Configurations cleared successfully!"); render(); } catch(e) { alert("Reset failed: " + e.message); }
     };
 
     window.clearLastChangeDate = async () => {
@@ -403,7 +407,8 @@
       state.modalSaving = true; render();
       const store = restaurants[state.selectedStoreId], safeKey = getFirebaseSafePathKey(store.storeNumber);
       try {
-        await update(`filterChanges/${safeKey}`, { acChanged: null, lastFilterChangeTimestamp: null, coilsCleaned: null, coilsCleanedDate: null, coilsCleanedTimestamp: null });
+        const existingAc = acRecords[safeKey] || {};
+        await update(`filterChanges/${safeKey}`, { ...existingAc, acChanged: null, lastFilterChangeTimestamp: null, coilsCleaned: null, coilsCleanedDate: null, coilsCleanedTimestamp: null });
         state.modalSaving = false; state.selectedStoreId = null; render();
       } catch(e) { state.modalSaving = false; render(); alert("Reset failed: " + e.message); }
     };
@@ -421,7 +426,8 @@
       const coilsTS = state.modalCoilsCleaned === "yes" ? convertDateStringToChicagoTimestamp(state.modalCoilsCleanedDate) : null;
       const safeKey = getFirebaseSafePathKey(store.storeNumber);
       try {
-        await update(`filterChanges/${safeKey}`, { storeNumber: store.storeNumber, acChanged: state.modalAcChanged, lastFilterChangeTimestamp: acTS, coilsCleaned: state.modalCoilsCleaned, coilsCleanedDate: state.modalCoilsCleaned === "yes" ? state.modalCoilsCleanedDate : "", coilsCleanedTimestamp: coilsTS, comments: state.modalComments.trim() });
+        const existingAc = acRecords[safeKey] || {};
+        await update(`filterChanges/${safeKey}`, { ...existingAc, storeNumber: store.storeNumber, acChanged: state.modalAcChanged, lastFilterChangeTimestamp: acTS, coilsCleaned: state.modalCoilsCleaned, coilsCleanedDate: state.modalCoilsCleaned === "yes" ? state.modalCoilsCleanedDate : "", coilsCleanedTimestamp: coilsTS, comments: state.modalComments.trim() });
         if (isCS) {
           const gasTS = state.modalGasChanged === "yes" ? convertDateStringToChicagoTimestamp(state.modalGasDateStr) : null;
           const dieselTS = state.modalDieselChanged === "yes" ? convertDateStringToChicagoTimestamp(state.modalDieselDateStr) : null;
@@ -456,7 +462,9 @@
       let ok = 0;
       for (let m of deploy) {
         try {
-          await update(`filterChanges/${getFirebaseSafePathKey(m.matchedStore.storeNumber)}`, { storeNumber: m.matchedStore.storeNumber, filterSize: m.summary, filterSizesList: JSON.stringify(m.items) });
+          const bulkKey = getFirebaseSafePathKey(m.matchedStore.storeNumber);
+          const existingAc = acRecords[bulkKey] || {};
+          await update(`filterChanges/${bulkKey}`, { ...existingAc, storeNumber: m.matchedStore.storeNumber, filterSize: m.summary, filterSizesList: JSON.stringify(m.items) });
           ok++;
         } catch(e){ console.error(e); }
       }
@@ -507,7 +515,7 @@
     }
 
     function updateHeader() {
-      ["all", "ac", "pump"].forEach(t => {
+      ["all", "ac", "pump", "map"].forEach(t => {
         const btn = document.getElementById("tab-" + t); if (!btn) return;
         btn.className = state.activeTab === t ? "px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all bg-white text-slate-900 shadow-sm animate-fade-in" : "px-2.5 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all text-slate-500 hover:text-slate-900";
       });
@@ -533,6 +541,15 @@
         modal.innerHTML = ""; return;
       }
       if (state.showBulkImport) { container.innerHTML = renderBulkImporter(); modal.innerHTML = ""; return; }
+      if (state.activeTab === "map") {
+        container.innerHTML = renderMapView();
+        renderStoreMap();
+        if (state.showInventoryModal) modal.innerHTML = renderInventoryModal();
+        else if (state.showInventoryHistoryModal) modal.innerHTML = renderInventoryHistoryModal();
+        else if (state.selectedStoreId) modal.innerHTML = renderStoreDetailsModal();
+        else modal.innerHTML = "";
+        return;
+      }
       container.innerHTML = renderACFiltersApp(); filterAndRenderCardsAndStats();
       if (state.showInventoryModal) modal.innerHTML = renderInventoryModal();
       else if (state.showInventoryHistoryModal) modal.innerHTML = renderInventoryHistoryModal();
@@ -1151,6 +1168,121 @@
           </div>
         </div>
       `;
+    }
+
+    // ===== MAP VIEW =====
+    // Pull [lat, lng] from a store record, tolerating several field names.
+    function getStoreLatLng(st) {
+      const latRaw = st.latitude !== undefined ? st.latitude : (st.lat !== undefined ? st.lat : null);
+      const lngRaw = st.longitude !== undefined ? st.longitude : (st.lng !== undefined ? st.lng : null);
+      if (latRaw === null || lngRaw === null || latRaw === "" || lngRaw === "") return null;
+      const lat = parseFloat(latRaw), lng = parseFloat(lngRaw);
+      if (isNaN(lat) || isNaN(lng)) return null;
+      return [lat, lng];
+    }
+
+    // Compute the same combined status the "View all" cards use, for one store.
+    function computeMapStatus(id, st) {
+      const k = getFirebaseSafePathKey(st.storeNumber), ac = acRecords[k] || {};
+      const acTS = ac.lastFilterChangeTimestamp || null, acDays = calculateDaysSinceChange(acTS);
+      let acStatus = "state-none"; if (acDays !== null) acStatus = acDays > 60 ? "state-overdue" : "state-good";
+      const isCS = getStoreCategory(st.storeName) === "cstore", p = pumpRecords[k] || {};
+      const gCh = p.gasChanged || "", dCh = p.dieselChanged || "", gTS = p.gasChangedTimestamp || null, dTS = p.dieselChangedTimestamp || null;
+      let gSt = gCh === "yes" ? (calculateDaysSinceChange(gTS) > 90 ? "overdue" : "done") : "pending";
+      let dSt = dCh === "yes" ? (calculateDaysSinceChange(dTS) > 90 ? "overdue" : "done") : "pending";
+      let pStatus = isCS ? (gSt === "overdue" || dSt === "overdue" ? "overdue" : gSt === "done" && dSt === "done" ? "good" : gSt === "pending" && dSt === "pending" ? "pending" : "incomplete") : "good";
+      let status = "state-none";
+      if (acStatus === "state-overdue" || (isCS && pStatus === "overdue")) status = "state-overdue";
+      else if (acStatus === "state-good" && (!isCS || pStatus === "good")) status = "state-good";
+      else if (acStatus === "state-none" && (isCS && pStatus === "pending")) status = "state-none";
+      else if (acStatus === "state-none" && !isCS) status = "state-none";
+      else status = "state-incomplete";
+      return status;
+    }
+
+    const MAP_STATUS_COLORS = {
+      "state-overdue": "#f43f5e",     // rose
+      "state-good": "#10b981",        // emerald
+      "state-incomplete": "#f97316",  // orange
+      "state-none": "#eab308"         // yellow
+    };
+    const MAP_STATUS_LABELS = {
+      "state-overdue": "Overdue",
+      "state-good": "Completed",
+      "state-incomplete": "Incomplete",
+      "state-none": "Pending"
+    };
+
+    function renderMapView() {
+      return `
+        <div class="flex flex-col gap-4">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 class="text-base sm:text-lg font-black text-slate-900 leading-none">Location Map</h2>
+              <p class="text-xs text-slate-500 mt-1">Each dot is a store, colored by compliance status. Click a dot to open its record and log filter changes.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3 text-[11px] font-bold text-slate-600">
+              <span class="inline-flex items-center gap-1.5"><span class="h-3 w-3 rounded-full" style="background:#10b981"></span>Completed</span>
+              <span class="inline-flex items-center gap-1.5"><span class="h-3 w-3 rounded-full" style="background:#f97316"></span>Incomplete</span>
+              <span class="inline-flex items-center gap-1.5"><span class="h-3 w-3 rounded-full" style="background:#eab308"></span>Pending</span>
+              <span class="inline-flex items-center gap-1.5"><span class="h-3 w-3 rounded-full" style="background:#f43f5e"></span>Overdue</span>
+            </div>
+          </div>
+          <div id="store-map" class="w-full rounded-2xl border border-slate-200 shadow-sm z-0" style="height:70vh; min-height:420px;"></div>
+          <p id="map-empty-note" class="hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2"></p>
+        </div>
+      `;
+    }
+
+    let _leafletMap = null;
+    function renderStoreMap() {
+      const el = document.getElementById("store-map");
+      if (!el) return;
+      if (typeof L === "undefined") {
+        el.innerHTML = `<div class="flex items-center justify-center h-full text-xs text-rose-600 font-semibold p-4 text-center">Map library couldn't load. Check your internet connection and reload.</div>`;
+        return;
+      }
+      // Leaflet keeps state on the DOM node; since render() rebuilds the node each time, always start fresh.
+      if (_leafletMap) { try { _leafletMap.remove(); } catch(e){} _leafletMap = null; }
+
+      const entries = Object.entries(restaurants);
+      const withCoords = [], missing = [];
+      entries.forEach(([id, st]) => {
+        const ll = getStoreLatLng(st);
+        if (ll) withCoords.push({ id, st, ll }); else missing.push(st.storeName || st.storeNumber || id);
+      });
+
+      const map = L.map(el, { scrollWheelZoom: true });
+      _leafletMap = map;
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors", maxZoom: 19
+      }).addTo(map);
+
+      if (withCoords.length === 0) {
+        map.setView([31.9686, -99.9018], 6); // Texas fallback
+      } else {
+        const bounds = [];
+        withCoords.forEach(({ id, st, ll }) => {
+          const status = computeMapStatus(id, st);
+          const color = MAP_STATUS_COLORS[status] || "#64748b";
+          const marker = L.circleMarker(ll, {
+            radius: 9, color: "#ffffff", weight: 2, fillColor: color, fillOpacity: 0.95
+          }).addTo(map);
+          const label = MAP_STATUS_LABELS[status] || "Unknown";
+          const safeName = (st.storeName || "Store").replace(/</g, "&lt;");
+          marker.bindTooltip(`${safeName} — ${label}`, { direction: "top", offset: [0, -6] });
+          marker.on("click", () => { window.openStore(id); });
+          bounds.push(ll);
+        });
+        if (bounds.length === 1) map.setView(bounds[0], 13);
+        else map.fitBounds(bounds, { padding: [40, 40] });
+      }
+
+      const note = document.getElementById("map-empty-note");
+      if (note && missing.length > 0) {
+        note.classList.remove("hidden");
+        note.textContent = `${missing.length} store${missing.length === 1 ? "" : "s"} not shown (missing coordinates): ${missing.slice(0, 8).join(", ")}${missing.length > 8 ? "…" : ""}`;
+      }
     }
 
     loadDashboardData();
