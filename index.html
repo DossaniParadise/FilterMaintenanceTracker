@@ -230,6 +230,8 @@
     window.openHistoryModal = (sz) => { state.selectedHistorySize = sz; state.showInventoryHistoryModal = true; render(); };
     window.closeHistoryModal = () => { state.showInventoryHistoryModal = false; render(); };
     window.updateInvField = (field, val) => { state[field] = val; render(); };
+    // Store the inventory date without re-rendering (re-render would destroy the date input mid-entry).
+    window.setInvDate = (val) => { state.invDateStr = val; };
 
     window.handleInvInput = (field, val) => {
       state[field] = val;
@@ -326,14 +328,23 @@
     };
 
     window.closeStoreModal = () => { state.selectedStoreId = null; render(); };
+    // Flip a Yes/No toggle pair's styling in place, without a full re-render
+    // (a full re-render rebuilds the modal HTML and destroys the date input mid-entry).
+    function setToggleYes(prefix) {
+      const yes = document.getElementById(prefix + "-yes-btn");
+      const no = document.getElementById(prefix + "-no-btn");
+      if (yes) yes.className = "flex-1 py-1 text-xs font-bold rounded bg-emerald-600 text-white";
+      if (no) no.className = "flex-1 py-1 text-xs font-bold rounded";
+    }
+
     window.onModalAcChanged = (val) => { state.modalAcChanged = val; state.modalDateStr = val === "yes" ? getChicagoTodayDateString() : ""; render(); };
-    window.onModalDateChanged = (val) => { state.modalDateStr = val; if (val) state.modalAcChanged = "yes"; render(); };
+    window.onModalDateChanged = (val) => { state.modalDateStr = val; if (val) { state.modalAcChanged = "yes"; setToggleYes("ac"); } };
     window.onModalCoilsCleaned = (val) => { state.modalCoilsCleaned = val; state.modalCoilsCleanedDate = val === "yes" ? getChicagoTodayDateString() : ""; render(); };
-    window.onModalCoilsCleanedDateChanged = (val) => { state.modalCoilsCleanedDate = val; if (val) state.modalCoilsCleaned = "yes"; render(); };
+    window.onModalCoilsCleanedDateChanged = (val) => { state.modalCoilsCleanedDate = val; if (val) { state.modalCoilsCleaned = "yes"; setToggleYes("coils"); } };
     window.onModalGasChanged = (val) => { state.modalGasChanged = val; state.modalGasDateStr = val === "yes" ? getChicagoTodayDateString() : ""; render(); };
-    window.onModalGasDateChanged = (val) => { state.modalGasDateStr = val; if (val) state.modalGasChanged = "yes"; render(); };
+    window.onModalGasDateChanged = (val) => { state.modalGasDateStr = val; if (val) { state.modalGasChanged = "yes"; setToggleYes("gas"); } };
     window.onModalDieselChanged = (val) => { state.modalDieselChanged = val; state.modalDieselDateStr = val === "yes" ? getChicagoTodayDateString() : ""; render(); };
-    window.onModalDieselDateChanged = (val) => { state.modalDieselDateStr = val; if (val) state.modalDieselChanged = "yes"; render(); };
+    window.onModalDieselDateChanged = (val) => { state.modalDieselDateStr = val; if (val) { state.modalDieselChanged = "yes"; setToggleYes("diesel"); } };
     window.onModalCommentsChanged = (val) => { state.modalComments = val.substring(0, 250); const c = document.getElementById("comments-counter"); if (c) c.innerText = `${state.modalComments.length} / 250`; };
 
     window.toggleModalSizesSection = () => { state.modalShowSizesSection = !state.modalShowSizesSection; render(); };
@@ -829,7 +840,7 @@
                 <div class="p-3 bg-slate-50 border rounded-xl flex flex-col gap-1.5">
                   <div class="flex justify-between text-xs font-bold text-slate-800"><span>AC Filters Changed?</span></div>
                   <div class="flex gap-2">
-                    <div class="flex bg-slate-200 p-0.5 border rounded-lg flex-1"><button onclick="window.onModalAcChanged('yes')" class="flex-1 py-1 text-xs font-bold rounded ${state.modalAcChanged==='yes'?'bg-emerald-600 text-white':''}">Yes</button><button onclick="window.onModalAcChanged('no')" class="flex-1 py-1 text-xs font-bold rounded ${state.modalAcChanged==='no'?'bg-rose-600 text-white':''}">No</button></div>
+                    <div class="flex bg-slate-200 p-0.5 border rounded-lg flex-1"><button id="ac-yes-btn" onclick="window.onModalAcChanged('yes')" class="flex-1 py-1 text-xs font-bold rounded ${state.modalAcChanged==='yes'?'bg-emerald-600 text-white':''}">Yes</button><button id="ac-no-btn" onclick="window.onModalAcChanged('no')" class="flex-1 py-1 text-xs font-bold rounded ${state.modalAcChanged==='no'?'bg-rose-600 text-white':''}">No</button></div>
                     <input type="date" value="${state.modalDateStr}" onchange="window.onModalDateChanged(this.value)" class="border rounded p-1 text-xs" />
                   </div>
                 </div>
@@ -837,7 +848,7 @@
                 <div class="p-3 bg-slate-50 border rounded-xl flex flex-col gap-1.5">
                   <div class="flex justify-between text-xs font-bold text-slate-800"><span>AC Coils Cleaned?</span></div>
                   <div class="flex gap-2">
-                    <div class="flex bg-slate-200 p-0.5 border rounded-lg flex-1"><button onclick="window.onModalCoilsCleaned('yes')" class="flex-1 py-1 text-xs font-bold rounded ${state.modalCoilsCleaned==='yes'?'bg-emerald-600 text-white':''}">Yes</button><button onclick="window.onModalCoilsCleaned('no')" class="flex-1 py-1 text-xs font-bold rounded ${state.modalCoilsCleaned==='no'?'bg-rose-600 text-white':''}">No</button></div>
+                    <div class="flex bg-slate-200 p-0.5 border rounded-lg flex-1"><button id="coils-yes-btn" onclick="window.onModalCoilsCleaned('yes')" class="flex-1 py-1 text-xs font-bold rounded ${state.modalCoilsCleaned==='yes'?'bg-emerald-600 text-white':''}">Yes</button><button id="coils-no-btn" onclick="window.onModalCoilsCleaned('no')" class="flex-1 py-1 text-xs font-bold rounded ${state.modalCoilsCleaned==='no'?'bg-rose-600 text-white':''}">No</button></div>
                     <input type="date" value="${state.modalCoilsCleanedDate}" onchange="window.onModalCoilsCleanedDateChanged(this.value)" class="border rounded p-1 text-xs" />
                   </div>
                 </div>
@@ -846,14 +857,14 @@
                   <div class="p-3 bg-slate-50 border rounded-xl flex flex-col gap-1.5">
                     <div class="flex justify-between text-xs font-bold text-slate-800"><span>Gas Filters Changed?</span></div>
                     <div class="flex gap-2">
-                      <div class="flex bg-slate-200 p-0.5 border rounded-lg flex-1"><button onclick="window.onModalGasChanged('yes')" class="flex-1 py-1 text-xs font-bold rounded ${state.modalGasChanged==='yes'?'bg-emerald-600 text-white':''}">Yes</button><button onclick="window.onModalGasChanged('no')" class="flex-1 py-1 text-xs font-bold rounded ${state.modalGasChanged==='no'?'bg-rose-600 text-white':''}">No</button></div>
+                      <div class="flex bg-slate-200 p-0.5 border rounded-lg flex-1"><button id="gas-yes-btn" onclick="window.onModalGasChanged('yes')" class="flex-1 py-1 text-xs font-bold rounded ${state.modalGasChanged==='yes'?'bg-emerald-600 text-white':''}">Yes</button><button id="gas-no-btn" onclick="window.onModalGasChanged('no')" class="flex-1 py-1 text-xs font-bold rounded ${state.modalGasChanged==='no'?'bg-rose-600 text-white':''}">No</button></div>
                       <input type="date" value="${state.modalGasDateStr}" onchange="window.onModalGasDateChanged(this.value)" class="border rounded p-1 text-xs" />
                     </div>
                   </div>
                   <div class="p-3 bg-slate-50 border rounded-xl flex flex-col gap-1.5">
                     <div class="flex justify-between text-xs font-bold text-slate-800"><span>Diesel Filters Changed?</span></div>
                     <div class="flex gap-2">
-                      <div class="flex bg-slate-200 p-0.5 border rounded-lg flex-1"><button onclick="window.onModalDieselChanged('yes')" class="flex-1 py-1 text-xs font-bold rounded ${state.modalDieselChanged==='yes'?'bg-emerald-600 text-white':''}">Yes</button><button onclick="window.onModalDieselChanged('no')" class="flex-1 py-1 text-xs font-bold rounded ${state.modalDieselChanged==='no'?'bg-rose-600 text-white':''}">No</button></div>
+                      <div class="flex bg-slate-200 p-0.5 border rounded-lg flex-1"><button id="diesel-yes-btn" onclick="window.onModalDieselChanged('yes')" class="flex-1 py-1 text-xs font-bold rounded ${state.modalDieselChanged==='yes'?'bg-emerald-600 text-white':''}">Yes</button><button id="diesel-no-btn" onclick="window.onModalDieselChanged('no')" class="flex-1 py-1 text-xs font-bold rounded ${state.modalDieselChanged==='no'?'bg-rose-600 text-white':''}">No</button></div>
                       <input type="date" value="${state.modalDieselDateStr}" onchange="window.onModalDieselDateChanged(this.value)" class="border rounded p-1 text-xs" />
                     </div>
                   </div>
@@ -969,7 +980,7 @@
                   <label class="text-[11px] uppercase font-bold text-slate-500 tracking-wider flex items-center gap-1 [a11]">
                     📅 Date of Entry <span class="text-[8px] text-blue-500 font-bold ml-1">[a11]</span>
                   </label>
-                  <input type="date" value="${state.invDateStr}" onchange="window.updateInvField('invDateStr', this.value)" class="w-full text-xs border border-slate-250 rounded-xl px-3 py-2.5 outline-none focus:border-slate-400 font-sans" />
+                  <input type="date" value="${state.invDateStr}" onchange="window.setInvDate(this.value)" class="w-full text-xs border border-slate-250 rounded-xl px-3 py-2.5 outline-none focus:border-slate-400 font-sans" />
                 </div>
 
                 <div class="flex flex-col gap-1.5">
